@@ -4,7 +4,7 @@
 - At least one person has to review the code before merging.
 - Don't include random fixes in pull requests.
 - You are reviewing the code and not the person.
-- If a solution is temporary mention it in a pull request and create an issue.
+- If a solution is temporary mention it in the pull request and create an issue.
 - Issues should include links to the places (with exact line) you are talking about.
 
 ## Code guidelines
