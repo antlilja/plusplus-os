@@ -13,7 +13,8 @@
 - Links in comments are encouraged
 - Exit early instead of nesting a bunch of if statements
 - Group code in scopes
-- Don't split code up into too many functions
+- Don't split code up into too many functions but don't create HUGE functions. 
+- Every function should do one thing.
 - Tag TODOs with your name, the date and an issue. (// TODO(name, date, issue number))
 - g_ prefix for global variables.
 - c_ prefix for global constants.
