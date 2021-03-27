@@ -1,4 +1,5 @@
 #include "elf-loader.h"
+#include "efidef.h"
 
 #include <efi.h>
 #include <stdbool.h>
@@ -17,6 +18,8 @@
 
 #define PT_LOAD 1
 #define PT_DYNAMIC 2
+
+#define PF_X 1
 
 #define DT_NULL 0
 #define DT_HASH 4
@@ -143,10 +146,12 @@ EFI_STATUS load_kernel(EFI_SYSTEM_TABLE* st, EFI_FILE* root, CHAR16* filename,
     for (UINTN p = 0; p < file_header->e_phnum; ++p) {
         Elf64_Phdr* header = &program_headers[p];
         if (header->p_type == PT_LOAD) {
+            EFI_MEMORY_TYPE mem_type = EfiLoaderData;
+            if (header->p_flags & PF_X) mem_type = EfiLoaderCode;
 
             // Allocate pages for segment
             status = st->BootServices->AllocatePages(AllocateAnyPages,
-                                                     EfiReservedMemoryType,
+                                                     mem_type,
                                                      EFI_SIZE_TO_PAGES(header->p_memsz),
                                                      (EFI_PHYSICAL_ADDRESS*)header->p_vaddr);
             if (EFI_ERROR(status)) return status;
