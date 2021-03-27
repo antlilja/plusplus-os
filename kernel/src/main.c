@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "rendering.h"
 
 typedef struct MemoryMap {
     uint64_t buffer_size;
@@ -8,29 +9,22 @@ typedef struct MemoryMap {
     uint32_t desc_version;
 } __attribute__((packed)) MemoryMap;
 
-typedef enum {
-    e_RGB8,
-    e_BGR8,
-    e_BitMask,
-    e_BltOnly,
-    e_FBFormatMax,
-} FBFormat;
+_Noreturn void kernel_entry(MemoryMap* mm, FrameBuffer* fb) {
+    // set frame buffer
+    g_frame_buffer = fb;
+    clear_screen(g_bg_color);
 
-typedef struct Framebuffer {
-    void* address;
-    uint64_t width;
-    uint64_t height;
-    uint64_t pixels_per_scanline;
-    FBFormat format;
-} __attribute__((packed)) Framebuffer;
+    print_string("it's gamertime B)", 10, 10);
+    print_hex_32(0xdeadbeef, 10, 11);
+    print_hex_64(0xdeadbeefdeadbeefUL, 10, 12);
 
-_Noreturn void kernel_entry(MemoryMap* mm, Framebuffer* fb) {
-    // Fills the framebuffer with a beautiful color
-    for (int y = 0; y < fb->height; ++y) {
-        for (int x = 0; x < fb->width; ++x) {
-            *((uint32_t*)(fb->address + 4 * fb->pixels_per_scanline * y + 4 * x)) = 0xffee2a7a;
-        }
-    }
+    uint64_t rip;
+    asm("leaq (%%rip), %0" : "=r"(rip));
+
+    g_bg_color = 0xff000000;
+
+    // don't do this
+    print_hex(rip, 10 + print_string("instruction pointer: ", 10, 15), 15);
 
     // This function can't return
     while (1)
