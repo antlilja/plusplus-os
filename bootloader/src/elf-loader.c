@@ -262,7 +262,7 @@ EFI_STATUS load_kernel(EFI_SYSTEM_TABLE* st, EFI_FILE* root, CHAR16* filename,
                     break;
                 }
 
-                if (hash & 1) break;
+                if (symbol_hash & 1) break;
 
                 ++symbol_index;
             }
