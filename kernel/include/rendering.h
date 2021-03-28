@@ -26,19 +26,19 @@ void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg);
 
 //print value in hex
 //returns the number of characters written (including 0x)
-uint64_t print_hex(uint64_t value, uint64_t x, uint64_t y);
+uint64_t put_hex(uint64_t value, uint64_t x, uint64_t y);
 
-//print a certain amount of hex characters
-void print_hex_padleft(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles);
+// print a certain amount of hex characters
+void put_hex_padleft(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles);
 
-//print 32 bits of an integer at character coordinates
-void print_hex_32(uint64_t value, uint64_t x, uint64_t y);
+// print 32 bits of an integer at character coordinates
+void put_hex_32(uint64_t value, uint64_t x, uint64_t y);
 
-//print 64 bits of an integer at character coordinates
-void print_hex_64(uint64_t value, uint64_t x, uint64_t y);
+// print 64 bits of an integer at character coordinates
+void put_hex_64(uint64_t value, uint64_t x, uint64_t y);
 
 //clear screen with a certain color
 void clear_screen(uint32_t color);
 
-//print string and return length
-uint64_t print_string(char* str, uint64_t x, uint64_t y);
+// print string and return length
+uint64_t put_string(char* str, uint64_t x, uint64_t y);

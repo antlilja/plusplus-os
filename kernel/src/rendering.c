@@ -27,7 +27,7 @@ void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg) {
     }
 }
 
-uint64_t print_string(char* str, uint64_t x, uint64_t y) {
+uint64_t put_string(char* str, uint64_t x, uint64_t y) {
     uint64_t i = 0;
     while (str[i] != 0) {
         if (str[i] >= '!' && str[i] < '~') put_char(str[i], x + i, y, g_fg_color, g_bg_color);
@@ -38,7 +38,7 @@ uint64_t print_string(char* str, uint64_t x, uint64_t y) {
     return i;
 }
 
-void print_hex_len(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles) {
+void put_hex_len(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles) {
     put_char('0', x, y, g_fg_color, g_bg_color);
     put_char('x', x + 1, y, g_fg_color, g_bg_color);
 
@@ -53,16 +53,16 @@ void print_hex_len(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles) {
     }
 }
 
-uint64_t print_hex(uint64_t value, uint64_t x, uint64_t y) {
+uint64_t put_hex(uint64_t value, uint64_t x, uint64_t y) {
     // find largest nonzero nibble
     uint64_t nibbles = 16;
     while (nibbles > 2 && !(value & (0xFUL << 4 * --nibbles)))
         ;
 
-    print_hex_len(value, x, y, ++nibbles);
+    put_hex_len(value, x, y, ++nibbles);
     return nibbles + 2;
 }
 
-void print_hex_32(uint64_t value, uint64_t x, uint64_t y) { print_hex_len(value, x, y, 8); }
+void put_hex_32(uint64_t value, uint64_t x, uint64_t y) { put_hex_len(value, x, y, 8); }
 
-void print_hex_64(uint64_t value, uint64_t x, uint64_t y) { print_hex_len(value, x, y, 16); }
+void put_hex_64(uint64_t value, uint64_t x, uint64_t y) { put_hex_len(value, x, y, 16); }
