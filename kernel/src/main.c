@@ -14,22 +14,11 @@ _Noreturn void kernel_entry(MemoryMap* mm, Framebuffer* fb) {
     g_frame_buffer = fb;
     clear_screen(g_bg_color);
 
-    put_string("       _     _____  _____  ", 10, 4);	
+    put_string("       _     _____  _____  ", 10, 4);
     put_string("   _ _| |_  |     ||  ___| ", 10, 5);
     put_string(" _| |_   _| |  |  ||___  | ", 10, 6);
     put_string("|_   _|_|   |_____||_____| ", 10, 7);
     put_string("  |_|               v0.0.0 ", 10, 8);
-    put_string("it's gamertime B)", 10, 10);
-    put_hex_32(0xdeadbeef, 10, 11);
-    put_hex_64(0xdeadbeefdeadbeefUL, 10, 12);
-
-    uint64_t rip;
-    asm("leaq (%%rip), %0" : "=r"(rip));
-
-    g_bg_color = 0xff000000;
-
-    // don't do this
-    put_hex(rip, 10 + put_string("instruction pointer: ", 10, 15), 15);
 
     // This function can't return
     while (1)
