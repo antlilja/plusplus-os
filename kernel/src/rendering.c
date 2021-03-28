@@ -22,7 +22,7 @@ void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg) {
 
     for (int cy = 0; cy < 16; ++cy) {
         for (int cx = 0; cx < 8; ++cx) {
-            put_pixel(cx + c, cy + y, (glyph[cy] & mask[cx]) ? fg : bg);
+            put_pixel(cx + x * 8, cy + y * 16, (glyph[cy] & mask[cx]) ? fg : bg);
         }
     }
 }
