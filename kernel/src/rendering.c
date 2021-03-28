@@ -2,8 +2,8 @@
 #include "font.h"
 
 Framebuffer* g_frame_buffer;
-uint64_t g_bg_color = 0x00000000;
-uint64_t g_fg_color = 0xffee2a7a;
+uint32_t g_bg_color = 0x00000000;
+uint32_t g_fg_color = 0xffee2a7a;
 
 void put_pixel(uint64_t x, uint64_t y, uint32_t color) {
     // write to frame buffer, assumes 4 byte color.
@@ -11,7 +11,7 @@ void put_pixel(uint64_t x, uint64_t y, uint32_t color) {
         color;
 }
 
-void clear_screen(uint64_t color) {
+void clear_screen(uint32_t color) {
     for (uint64_t x = 0; x < g_frame_buffer->width; x++)
         for (uint64_t y = 0; y < g_frame_buffer->height; y++) put_pixel(x, y, color);
 }
@@ -54,7 +54,7 @@ void print_hex_len(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles) {
 }
 
 uint64_t print_hex(uint64_t value, uint64_t x, uint64_t y) {
-    // find first nibble with contents
+    // find largest nonzero nibble
     uint64_t nibbles = 16;
     while (nibbles > 2 && !(value & (0xFUL << 4 * --nibbles)))
         ;

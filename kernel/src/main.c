@@ -9,7 +9,7 @@ typedef struct MemoryMap {
     uint32_t desc_version;
 } __attribute__((packed)) MemoryMap;
 
-_Noreturn void kernel_entry(MemoryMap* mm, FrameBuffer* fb) {
+_Noreturn void kernel_entry(MemoryMap* mm, Framebuffer* fb) {
     // set frame buffer
     g_frame_buffer = fb;
     clear_screen(g_bg_color);
