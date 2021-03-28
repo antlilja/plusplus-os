@@ -9,7 +9,7 @@ typedef enum {
     e_FBFormatMax,
 } FBFormat;
 
-typedef struct Framebuffer {
+typedef struct {
     void* address;
     uint64_t width;
     uint64_t height;

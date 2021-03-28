@@ -27,7 +27,7 @@
 #define DT_SYMTAB 6
 #define DT_GNU_HASH 0x6ffffef5
 
-typedef struct Elf64_Ehdr {
+typedef struct {
     unsigned char e_ident[EI_NIDENT];
     UINT16 e_type;
     UINT16 e_machine;
@@ -44,7 +44,7 @@ typedef struct Elf64_Ehdr {
     UINT16 e_shstrndx;
 } __attribute__((packed)) Elf64_Ehdr;
 
-typedef struct Elf64_Phdr {
+typedef struct {
     UINT32 p_type;
     UINT32 p_flags;
     UINT64 p_offset;
@@ -55,12 +55,12 @@ typedef struct Elf64_Phdr {
     UINT64 p_align;
 } __attribute__((packed)) Elf64_Phdr;
 
-typedef struct Elf64_Dyn {
+typedef struct {
     INT64 d_tag;
     UINT64 d_val_or_addr;
 } __attribute__((packed)) Elf64_Dyn;
 
-typedef struct Elf64_Sym {
+typedef struct {
     UINT32 st_name;
     UINT8 st_info;
     UINT8 st_other;

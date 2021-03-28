@@ -32,7 +32,7 @@ struct FrameBuffer {
 void foo(struct FrameBuffer* fb);
 
 // Do this
-typedef struct FrameBuffer {
+typedef struct {
 // ...
 } FrameBuffer;
 void foo(FrameBuffer* fb);

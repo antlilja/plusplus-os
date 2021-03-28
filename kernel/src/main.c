@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include "rendering.h"
 
-typedef struct MemoryMap {
+typedef struct {
     uint64_t buffer_size;
     uint8_t* buffer;
     uint64_t mapkey;

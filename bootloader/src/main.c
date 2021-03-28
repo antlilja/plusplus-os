@@ -16,7 +16,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     if (EFI_ERROR(status)) return status;
 
     // Locate the graphics output protocol and populate frame buffer
-    struct FrameBuffer {
+    struct {
         EFI_PHYSICAL_ADDRESS address;
         UINT64 width;
         UINT64 height;
@@ -91,7 +91,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     if (EFI_ERROR(status)) return status;
 
     // Get the memory map
-    struct MemoryMap {
+    struct {
         UINT64 nbytes;
         UINT8* buffer;
         UINTN mapkey;
