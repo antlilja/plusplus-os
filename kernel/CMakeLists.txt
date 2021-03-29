@@ -1,6 +1,7 @@
 add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/gdt.c
 )
 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/linker.ld)
