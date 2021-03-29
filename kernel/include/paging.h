@@ -9,11 +9,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef uint64_t PageFlags;
+typedef uint64_t PageEntry;
+
 #define PAGETABLE_SIZE 0x100000
 
 //temporary solution before memory allocation is done
 extern uint64_t page_zone_stack[PAGETABLE_SIZE];
 extern uint64_t* page_zone_pointer;
+
+#define GET_PAGE_FLAGS(page_entry) (page_entry & ~PAGING_PTRMASK)
+#define GET_PAGE_ADDRESS(page_entry) (page_entry & PAGING_PTRMASK)
 
 #define PAGING_PRESENT    (1L << 0)
 #define PAGING_WRITABLE   (1L << 1)
@@ -30,27 +36,22 @@ extern uint64_t* page_zone_pointer;
 
 #define PAGING_PTRMASK ((1L << 48) - (1L << 12))    //bits 48 - 12
 
-//FLAGS TO BE APPLIED WHEN ALLOCATING NEW PAGETABLES
-#define PAGETABLE_DEFAULT (PAGING_PRESENT | PAGING_WRITABLE)
-
 //returns the P4 pointer
-uint64_t* get_cr3();
+PageEntry* get_cr3();
 
 //sets the P4 pointer
-void set_cr3(uint64_t* P4);
-
+void set_cr3(PageEntry* P4);
 
 //maps all virtual adidresses between virtaddr_low and virtaddr_high relatve to phys_low and makes sure they're in the pagetable
 //
 //ex:
 //map_pages(P4, 0x4000, 0x8000, 0x0000, PAGETABLE_DEFAULT)
 //will map all virtual addresses 0x4000 - 0x8000 to 0x0000 - 0x4000 using the flags in PAGETABLE_DEFAULT
-void map_pages(uint64_t* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t phys_low, uint64_t flags);
+void map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t phys_low, uint64_t flags);
 
 //identity maps any address between virtaddr_low and virtaddr_high and makes sure they're in the pagetable
-//all pages will have PAGETABLE_DEFAULT set 
-void identity_map_pages(uint64_t* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t flags);
+void identity_map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t flags);
 
 //gets a pointer to the pagetable entry that maps virtaddr to physical space
 //returns 0 if virtaddr is unpaged
-uint64_t* fetch_page(uint64_t* table, uint64_t virtaddr);
+PageEntry* fetch_page_entry(PageEntry* table, uint64_t virtaddr);
