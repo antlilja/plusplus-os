@@ -11,10 +11,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     status = st->BootServices->SetWatchdogTimer(0, 0, 0, NULL);
     if (EFI_ERROR(status)) return status;
 
-    // Clear screen
-    status = st->ConOut->ClearScreen(st->ConOut);
-    if (EFI_ERROR(status)) return status;
-
     // Locate the graphics output protocol and populate frame buffer
     struct {
         EFI_PHYSICAL_ADDRESS address;
@@ -52,17 +48,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
         frame_buffer.height = info->VerticalResolution;
     }
 
-    status =
-        st->ConOut->OutputString(st->ConOut, L"Press any key to load kernel and jump to it\r\n");
-    if (EFI_ERROR(status)) return status;
-
-    // Wait for keypress before continuing
-    {
-        UINTN index;
-        status = st->BootServices->WaitForEvent(1, &st->ConIn->WaitForKey, &index);
-        if (EFI_ERROR(status)) return status;
-    }
-
     // Locate the file system protocol
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* file_system_protocol;
     {
@@ -84,10 +69,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
 
     // Close file system
     status = root->Close(root);
-    if (EFI_ERROR(status)) return status;
-
-    // Clear any key presses before this point
-    status = st->ConIn->Reset(st->ConIn, FALSE);
     if (EFI_ERROR(status)) return status;
 
     // Get the memory map
