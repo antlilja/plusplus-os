@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "rendering.h"
+#include "gdt.h"
 
 typedef struct {
     uint64_t buffer_size;
@@ -19,6 +20,12 @@ _Noreturn void kernel_entry(MemoryMap* mm, Framebuffer* fb) {
     put_string(" _| |_   _| |  |  ||___  | ", 10, 6);
     put_string("|_   _|_|   |_____||_____| ", 10, 7);
     put_string("  |_|               v0.0.0 ", 10, 8);
+
+    // This disables interrupts
+    // They can be turned back on after setting up the IDT
+    setup_gdt_and_tss();
+
+    put_string("Global descriptor table initalized", 10, 10);
 
     // This function can't return
     while (1)
