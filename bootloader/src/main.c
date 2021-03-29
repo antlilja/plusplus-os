@@ -123,8 +123,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     status = st->BootServices->ExitBootServices(image_handle, memory_map.mapkey);
     if (EFI_ERROR(status)) return status;
 
-    // TODO (Anton Lilja, 26-03-2021, #2):
-    // We should setup the global descriptor table before jumping to the kernel
     asm volatile(
         // Setup stack and base pointer
         "mov %[stack], %%rsp\n"
