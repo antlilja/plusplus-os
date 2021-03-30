@@ -4,6 +4,7 @@
 #define PAGETABLE_DEFAULT (PAGING_PRESENT | PAGING_WRITABLE)
 
 #define GET_TABLE_PTR(page_entry) (PageEntry*)(page_entry & PAGING_PTRMASK)
+#define GET_LAYER_PAGESIZE(depth) (1UL << (3 + 9 * depth))
 
 PageEntry* get_cr3() {
     uint64_t* ptr;
@@ -18,17 +19,55 @@ void set_cr3(PageEntry* P4) {
         : "r"(P4));
 }
 
+/*
+    LESS TEMPORARY PAGE ALLOCATION
+
+    When an entire 2MB pagetable is mapped/flagged the same, it will be replaced by a large page and
+   its content will be free to use for new tables. This is a replacement to freeing and allocating
+   sections manually, limiting paging to the process of mapping and constraining memory usage.
+
+   With 8 GB of memory, the theoretical MAXIMAL gain of space from manual page allocation is 32 KB.
+   Instead, the next step would be to place superflous pagetables on disk, as described here:
+   https://en.wikipedia.org/wiki/Page_table#Role_of_the_page_table
+*/
 PageEntry page_zone_stack[PAGETABLE_SIZE] __attribute__((aligned(4096)));
 PageEntry* page_zone_pointer = &page_zone_stack[0];
 
-/*
-    TEMPORARY PAGE ALLOCATION
+// hopefully, less than a quarter of the page stack should only be free at once
+#define FREED_TABLE_SIZE (PAGETABLE_SIZE / 512 / 4)
+PageEntry* free_tables_stack[FREED_TABLE_SIZE];
+uint64_t free_tables_count;
 
-    When heap allocation is implemented, we can actively check if pagetable contains similar
-   children. If a pagetable can be remade as a single large page then all children will be freed and
-   should be available for new page tables.
-*/
-PageEntry* alloc_pagetable() { return page_zone_pointer += 512; }
+// leaks occur if too many tables are freed in total, this will count how many are leaked.
+// can be used for diagnostics later on.
+uint64_t leaked_tables = 0;
+
+PageEntry* alloc_pagetable() {
+    if (free_tables_count > 0) {
+        PageEntry* table = free_tables_stack[free_tables_count];
+
+        // clear contents of freed table
+        // REPLACE WITH MEMZERO WHEN AVALIABLE
+        for (int i = 0; i < 512; i++) table[i] = 0UL;
+
+        free_tables_count--;
+        return table;
+    }
+
+    return page_zone_pointer += 512;
+}
+
+// frees the table a page entry points to
+void free_pagetable(PageEntry page_entry) {
+    if (free_tables_count >= FREED_TABLE_SIZE) {
+        leaked_tables++;
+
+        return;
+    }
+
+    free_tables_stack[free_tables_count] = GET_TABLE_PTR(page_entry);
+    free_tables_count++;
+}
 
 // correctly indexed list containing the masks for each page table layer
 const PageFlags pagingmasks[5] = {
@@ -39,16 +78,44 @@ const PageFlags pagingmasks[5] = {
     (1L << 48) - (1L << 39)  // P4: bits (48 - 39]
 };
 
+// returns if a pagetable entry can be expressed as a large page, rather than a table
+bool check_table_redundancy(PageEntry page_entry, uint64_t page_depth) {
+    const bool is_large = page_entry & PAGING_LARGE;
+
+    if (is_large) return false;
+
+    const PageEntry* table = GET_TABLE_PTR(page_entry);
+    const PageFlags expected_flags = GET_PAGE_FLAGS(table[0]);
+
+    // get the tables pages size
+    const uint64_t delta = GET_LAYER_PAGESIZE(page_depth - 1);
+
+    uint64_t expected_address = GET_PAGE_ADDRESS(table[0]);
+
+    // check each page for similar mapping and flags
+    for (int i = 1; i < 512; i++) {
+        expected_address += delta;
+
+        const uint64_t address = GET_PAGE_ADDRESS(table[i]);
+        if (address != expected_address) return false;
+
+        const PageFlags flags = GET_PAGE_FLAGS(table[i]);
+        if (flags != expected_flags) return false;
+    }
+
+    return true;
+}
+
 PageEntry create_entry(uint64_t address, PageFlags flags) {
     return (address & PAGING_PTRMASK) | flags | PAGING_PRESENT;
 }
 
 // gets the table layer P's index of an address
-uint64_t get_table(uint64_t virtaddr, uint8_t P) {
+uint64_t get_table_index(uint64_t virtaddr, uint8_t P) {
     return (virtaddr & pagingmasks[P]) >> (3 + 9 * P);
 }
 
-// splits a large page into a pagetable
+// splits a large page into a pagetable.
 // depth is the paging layer of the table entry
 // returns the corrected pagetable entry
 PageEntry subdivide_large_table(PageEntry page_entry, uint64_t depth) {
@@ -65,7 +132,7 @@ PageEntry subdivide_large_table(PageEntry page_entry, uint64_t depth) {
     // P1 entries can't be large
     if (depth > 2) flags &= ~PAGING_LARGE;
 
-    uint64_t delta = 1UL << (3 + 9 * depth);
+    uint64_t delta = GET_LAYER_PAGESIZE(depth);
 
     // apply flags and update address in new page table
     for (int i = 0; i < 512; i++) {
@@ -99,14 +166,17 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
         table_addr += params->virtaddr_low & pagingmasks[depth];
     }
 
-    uint64_t delta = 1L << (3 + 9 * depth);
+    uint64_t delta = GET_LAYER_PAGESIZE(depth);
 
     // go through all relevant page entries
-    int low = get_table(table_addr, depth);
+    int low = get_table_index(table_addr, depth);
     while (low < 512 && table_addr <= params->virtaddr_high) {
         const uint64_t physaddr = table_addr + params->physoffset;
 
-        const bool filled_page = (table_addr + delta) <= params->virtaddr_high;
+        // determines if all pagetable entries are covered.
+        const bool filled_page =
+            table_addr >= params->virtaddr_low && table_addr + delta <= params->virtaddr_high;
+
         const bool is_large = table[low] & PAGING_LARGE;
         const bool is_present = table[low] & PAGING_PRESENT;
         const bool P1 = depth <= 1, P2 = depth == 2;
@@ -117,7 +187,9 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
             if (is_large || !is_present) goto set_mapping;
 
             // entry points to an already subdivided table
-            goto iterate_table;
+            // since all children will be mapped the same and share the same flags,
+            // it's instead freed and remade into a large page
+            goto collect_table_pages;
         }
 
         // table entry must be split into subsegments
@@ -129,7 +201,17 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
         PageEntry* next_table = GET_TABLE_PTR(table[low]);
         rec_setpage(next_table, table_addr, depth - 1, params);
 
+        // free pagetables that could be represented as large pages.
+        if (!is_large && P2 && check_table_redundancy(table[low], depth)) {
+            goto collect_table_pages;
+        }
+
         goto next;
+    }
+
+    collect_table_pages : // frees a pagetable and turns it into a large page
+    {
+        free_pagetable(table[low]);
     }
 
     set_mapping : // maps pagetable adresses and goes to the next iteration
@@ -160,7 +242,7 @@ void identity_map_pages(PageEntry* table, uint64_t low, uint64_t high, PageFlags
 PageEntry* fetch_page_entry(PageEntry* table, uint64_t virtaddr) {
     for (int i = 4; i > 0; --i) {
         // get relative table address
-        const int P = get_table(virtaddr, i);
+        const int P = get_table_index(virtaddr, i);
         const bool is_large = table[P] & PAGING_LARGE;
 
         // return when a page is reached
