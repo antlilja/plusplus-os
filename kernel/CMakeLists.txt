@@ -19,6 +19,8 @@ target_compile_options(kernel PRIVATE
   -fno-builtin
   -fPIE
   -O2
+  -Wall
+  -Wextra
 )
 
 
