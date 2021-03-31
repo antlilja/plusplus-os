@@ -18,4 +18,3 @@ uint16_t port_in_u16 (uint16_t addr);
 
 // wrapper for inl
 uint32_t port_in_u32 (uint16_t addr);
-
