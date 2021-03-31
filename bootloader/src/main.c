@@ -4,7 +4,6 @@
 
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     EFI_STATUS status;
-    EFI_INPUT_KEY key;
 
     // Disable the watchdog timer
     // (if the timer were to run out the application would be restarted)
