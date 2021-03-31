@@ -10,12 +10,6 @@
 typedef uint64_t PageFlags;
 typedef uint64_t PageEntry;
 
-#define PAGETABLE_SIZE 0x100000
-
-// temporary solution before memory allocation is done
-extern uint64_t page_zone_stack[PAGETABLE_SIZE];
-extern uint64_t* page_zone_pointer;
-
 #define GET_PAGE_FLAGS(page_entry) (page_entry & ~PAGING_PTRMASK)
 #define GET_PAGE_ADDRESS(page_entry) (page_entry & PAGING_PTRMASK)
 

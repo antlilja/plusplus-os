@@ -20,8 +20,10 @@ void set_cr3(PageEntry* P4) {
         : "r"(P4));
 }
 
-PageEntry page_zone_stack[PAGETABLE_SIZE] __attribute__((aligned(4096)));
-PageEntry* page_zone_pointer = &page_zone_stack[0];
+#define PAGE_TABLE_STACK_SIZE 0x100000
+
+PageEntry g_page_table_stack[PAGE_TABLE_STACK_SIZE] __attribute__((aligned(4096)));
+PageEntry* g_page_table_stack_pointer = &g_page_table_stack[0];
 
 /*
     TEMPORARY PAGE ALLOCATION
@@ -30,7 +32,7 @@ PageEntry* page_zone_pointer = &page_zone_stack[0];
    children. If a pagetable can be remade as a single large page then all children will be freed and
    should be available for new page tables.
 */
-PageEntry* alloc_pagetable() { return page_zone_pointer += 512; }
+PageEntry* alloc_pagetable() { return g_page_table_stack_pointer += 512; }
 
 // correctly indexed list containing the masks for each page table layer
 const PageFlags pagingmasks[5] = {
