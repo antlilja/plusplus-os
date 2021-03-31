@@ -20,7 +20,7 @@ _Noreturn void kernel_entry(MemoryMap* mm, Framebuffer* fb) {
     put_string("   _ _| |_  |     ||  ___| ", 10, 5);
     put_string(" _| |_   _| |  |  ||___  | ", 10, 6);
     put_string("|_   _|_|   |_____||_____| ", 10, 7);
-    put_string("  |_|               v0.0.0 ", 10, 8);
+    put_string("  |_|               Week-1 ", 10, 8);
 
     // This disables interrupts
     // They can be turned back on after setting up the IDT
