@@ -32,7 +32,7 @@ void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg);
 uint64_t put_hex(uint64_t value, uint64_t x, uint64_t y);
 
 // Put exact amount of hex characters (nibbles) at character coordinates
-void put_hex_padleft(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles);
+void put_hex_len(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles);
 
 // Put 32 bits of an integer at character coordinates
 void put_hex_32(uint64_t value, uint64_t x, uint64_t y);
