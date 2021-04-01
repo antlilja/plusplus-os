@@ -39,27 +39,23 @@ typedef uint64_t PageFlags;
 typedef uint64_t PageEntry;
 
 
-//temporary solution before memory allocation is done
-extern uint64_t page_zone_stack[PAGETABLE_SIZE];
-extern uint64_t* page_zone_pointer;
+#define GET_PAGE_FLAGS(page_entry) ((page_entry) & ~PAGING_PTRMASK)
+#define GET_PAGE_ADDRESS(page_entry) ((page_entry) & PAGING_PTRMASK)
 
-#define GET_PAGE_FLAGS(page_entry) (page_entry & ~PAGING_PTRMASK)
-#define GET_PAGE_ADDRESS(page_entry) (page_entry & PAGING_PTRMASK)
+#define PAGING_PRESENT      (1UL << 0)
+#define PAGING_WRITABLE     (1UL << 1)
+#define PAGING_USERSPACE    (1UL << 2)
 
-#define PAGING_PRESENT    (1L << 0)
-#define PAGING_WRITABLE   (1L << 1)
-#define PAGING_USERSPACE  (1L << 2)
+#define PAGING_WRITETHROUGH (1UL << 3)
+#define PAGING_NOCACHE      (1UL << 4)
+#define PAGING_ACCESSED     (1UL << 5)
+#define PAGING_DIRTY        (1UL << 6)
 
-#define PAGING_WRITETHROUGH (1L << 3)
-#define PAGING_NOCACHE      (1L << 4)
-#define PAGING_ACCESSED     (1L << 5)
-#define PAGING_DIRTY        (1L << 6)
+#define PAGING_LARGE        (1UL << 7)
+#define PAGING_GLOBAL       (1UL << 8)
+#define PAGING_DIR_NONEXEC  (1UL << 63)
 
-#define PAGING_LARGE        (1L << 7)
-#define PAGING_GLOBAL       (1L << 8)
-#define PAGING_DIR_NONEXEC  (1L << 63)
-
-#define PAGING_PTRMASK ((1L << 48) - (1L << 12))    //bits 48 - 12
+#define PAGING_PTRMASK ((1UL << 48) - (1UL << 12))    //bits 48 - 12
 
 //returns the P4 pointer
 PageEntry* get_cr3();

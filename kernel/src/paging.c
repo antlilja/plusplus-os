@@ -3,7 +3,8 @@
 // FLAGS TO BE APPLIED WHEN ALLOCATING NEW PAGETABLES
 #define PAGETABLE_DEFAULT (PAGING_PRESENT | PAGING_WRITABLE)
 
-#define GET_TABLE_PTR(page_entry) (PageEntry*)(page_entry & PAGING_PTRMASK)
+#define GET_TABLE_PTR(page_entry) (PageEntry*)((page_entry)&PAGING_PTRMASK)
+#define GET_LAYER_PAGESIZE(depth) (1UL << (3 + 9 * (depth)))
 
 PageEntry* get_cr3() {
     uint64_t* ptr;
