@@ -154,45 +154,38 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
         const bool filled_page =
             table_addr >= params->virtaddr_low && table_addr + delta <= params->virtaddr_high;
 
-        const bool is_large = table[low] & PAGING_LARGE;
-        const bool is_present = table[low] & PAGING_PRESENT;
         const bool P1 = depth <= 1, P2 = depth == 2;
 
-        if (P1) goto set_mapping;
+        const uint64_t physical_address = table_addr + params->physaddr_low - params->virtaddr_low;
+        if (P1) {
+            // Set mapping
+            table[low] = create_entry(physical_address, params->flags & ~PAGING_PTRMASK);
+        }
+        else if (P2 && filled_page) {
+            const bool is_large = table[low] & PAGING_LARGE;
+            const bool is_present = table[low] & PAGING_PRESENT;
+            if (!(is_large || !is_present)) {
+                // entry points to an already subdivided table
+                // since all children will be mapped the same and share the same flags,
+                // it's instead freed and remade into a large page
+                PageEntry* next_table = GET_TABLE_PTR(table[low]);
+                free_pagetable(next_table, depth);
+            }
 
-        if (P2 && filled_page) {
-            if (is_large || !is_present) goto set_mapping;
+            // Set mapping
+            const PageFlags flags = (params->flags & ~PAGING_PTRMASK) | PAGING_LARGE;
+            table[low] = create_entry(physical_address, flags);
+        }
+        else {
+            // table entry must be split into subsegments
+            table[low] = alloc_missing_table(table[low]);
+            table[low] = subdivide_large_table(table[low], depth);
 
-            // entry points to an already subdivided table
-            // since all children will be mapped the same and share the same flags,
-            // it's instead freed and remade into a large page
+            // go through the next layers page entries
             PageEntry* next_table = GET_TABLE_PTR(table[low]);
-            free_pagetable(next_table, depth);
-
-            goto set_mapping;
+            rec_setpage(next_table, table_addr, depth - 1, params);
         }
 
-        // table entry must be split into subsegments
-        table[low] = alloc_missing_table(table[low]);
-        table[low] = subdivide_large_table(table[low], depth);
-
-        // go through the next layers page entries
-        PageEntry* next_table = GET_TABLE_PTR(table[low]);
-        rec_setpage(next_table, table_addr, depth - 1, params);
-
-        goto next;
-
-    set_mapping : // maps pagetable adresses and goes to the next iteration
-    {
-        const uint64_t physical_address = table_addr + params->physaddr_low - params->virtaddr_low;
-
-        PageFlags applied_flags = params->flags & ~PAGING_PTRMASK;
-        if (!P1) applied_flags |= PAGING_LARGE;
-
-        table[low] = create_entry(physical_address, applied_flags);
-    }
-
-    next: // incremenet current page
         table_addr += delta;
         low++;
     }
