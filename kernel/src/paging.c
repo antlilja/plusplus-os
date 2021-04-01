@@ -166,26 +166,21 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
             // entry points to an already subdivided table
             // since all children will be mapped the same and share the same flags,
             // it's instead freed and remade into a large page
-            goto collect_table_pages;
+            PageEntry* next_table = GET_TABLE_PTR(table[low]);
+            free_pagetable(next_table, depth);
+
+            goto set_mapping;
         }
 
         // table entry must be split into subsegments
         table[low] = alloc_missing_table(table[low]);
         table[low] = subdivide_large_table(table[low], depth);
 
-    iterate_table : // go through the next layers page entries
-    {
+        // go through the next layers page entries
         PageEntry* next_table = GET_TABLE_PTR(table[low]);
         rec_setpage(next_table, table_addr, depth - 1, params);
 
         goto next;
-    }
-
-    collect_table_pages : // frees a pagetable and turns it into a large page
-    {
-        PageEntry* next_table = GET_TABLE_PTR(table[low]);
-        free_pagetable(next_table, depth);
-    }
 
     set_mapping : // maps pagetable adresses and goes to the next iteration
     {
