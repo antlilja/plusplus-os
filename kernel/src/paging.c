@@ -130,7 +130,7 @@ PageEntry alloc_missing_table(PageEntry page_entry) {
 typedef struct {
     uint64_t virtaddr_low;
     uint64_t virtaddr_high;
-    uint64_t physoffset;
+    uint64_t physaddr_low;
     PageFlags flags;
 } MapParams;
 
@@ -187,10 +187,12 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
 
     set_mapping : // maps pagetable adresses and goes to the next iteration
     {
+        const uint64_t physical_address = table_addr + params->physaddr_low - params->virtaddr_low;
+
         PageFlags applied_flags = params->flags & ~PAGING_PTRMASK;
         if (!P1) applied_flags |= PAGING_LARGE;
 
-        table[low] = create_entry(physaddr, applied_flags);
+        table[low] = create_entry(physical_address, applied_flags);
     }
 
     next: // incremenet current page
@@ -201,7 +203,7 @@ void rec_setpage(PageEntry* table, uint64_t table_addr, uint8_t depth, MapParams
 
 void map_pages(PageEntry* table, uint64_t low, uint64_t high, uint64_t phys_low, PageFlags flags) {
     MapParams params = {
-        low & PAGING_PTRMASK, high & PAGING_PTRMASK, (phys_low - low) & PAGING_PTRMASK, flags};
+        low & PAGING_PTRMASK, high & PAGING_PTRMASK, phys_low & PAGING_PTRMASK, flags};
 
     rec_setpage(table, 0, 4, &params);
 }
