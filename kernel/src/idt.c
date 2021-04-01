@@ -1,5 +1,6 @@
 #include "idt.h"
 #include "gdt.h"
+#include "pic.h"
 
 #include <stdint.h>
 
@@ -24,6 +25,9 @@ void setup_idt() {
         uint64_t base;
     } __attribute__((packed)) idt = {.size = sizeof(g_idt) - 1, .base = (uint64_t)&g_idt};
 
+    // initialize controllers for hardware interrupts
+    setup_interrupt_requests();
+
     asm(
         // Set IDT
         "lidt (%[idt])\n"
@@ -31,7 +35,7 @@ void setup_idt() {
         "sti\n"
         : // No output
           // Input
-        : [idt] "r"(&idt));
+        : [ idt ] "r"(&idt));
 }
 
 // General way to register an interrupt where you can set all values
