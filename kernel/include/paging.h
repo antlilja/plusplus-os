@@ -2,6 +2,32 @@
 //https://os.phil-opp.com/page-tables/  x64 4 layer paging
 //P4 P3 P2 P1 represent the different pagetable layers
 
+/*
+    This is currently set up to provide convenient way of creating pagetables, 
+    mapping and contstraining memory usage, which is a necessity for processes. 
+
+    Under the assumption that each process use their own pagetables, which
+    is described here:
+    
+    https://forum.osdev.org/viewtopic.php?f=1&t=32996
+    https://en.wikipedia.org/wiki/Context_switch#Cost
+
+    Then setting up a new page table could look like this:
+
+        PageEntry* new_p4 = create_pagetable();
+        map_pages(new_p4, 0, program_size, program_start, PAGING_WRITEABLE | PAGING_USERSPACE | ...);
+        map_pages(new_p4, data_start, data_end, program_start + data_start, PAGING_USERSPACE | ...);
+
+    ... go through each section and set flags ...
+
+    then when the process is swapped, you can get or set the table used by the MMU
+
+        set_cr3(new_p4);
+
+    when the process is killed, its pagetable can be freed
+    
+        free_pagetable(new_p4, 4);
+*/
 
 //uefi pagetables are placed in a nonreadable section by default
 
@@ -12,7 +38,6 @@
 typedef uint64_t PageFlags;
 typedef uint64_t PageEntry;
 
-#define PAGETABLE_SIZE 0x100000
 
 //temporary solution before memory allocation is done
 extern uint64_t page_zone_stack[PAGETABLE_SIZE];
@@ -42,7 +67,7 @@ PageEntry* get_cr3();
 //sets the P4 pointer
 void set_cr3(PageEntry* P4);
 
-//maps all virtual adidresses between virtaddr_low and virtaddr_high relatve to phys_low and makes sure they're in the pagetable
+//maps all virtual addresses between virtaddr_low and virtaddr_high relatve to phys_low and makes sure they're in the pagetable
 //
 //ex:
 //map_pages(P4, 0x4000, 0x8000, 0x0000, PAGETABLE_DEFAULT)
@@ -55,3 +80,11 @@ void identity_map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtad
 //gets a pointer to the pagetable entry that maps virtaddr to physical space
 //returns 0 if virtaddr is unpaged
 PageEntry* fetch_page_entry(PageEntry* table, uint64_t virtaddr);
+
+// creates a new page table containing 512 entries
+// note that the same pagetable structure is used for all depths
+PageEntry* create_pagetable();
+
+// frees a pagetable of certain depth layer
+// as example, the P4 table has a depth of 4
+void free_pagetable(PageEntry* table, uint64_t depth);
