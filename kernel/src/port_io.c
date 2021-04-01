@@ -1,62 +1,43 @@
-#include <stdint.h>
 #include "port_io.h"
 
-void port_out_u8(uint16_t addr, uint8_t data) {
-    asm("movw %[addr], %%dx\n"
-        "movb %[data], %%al\n"
-        "outb %%al, %%dx\n"
-        :
-        : [data] "r"(data), [addr] "r"(addr)
-        : "dx", "al");
+// The unsued attribute is used to avoid otherwise unavoidable unused parameter warnings
+#define UNUSED __attribute__((unused))
+
+__attribute__((naked)) void port_out_u8(UNUSED uint16_t addr, UNUSED uint8_t data) {
+    asm("movw %di, %dx\n"
+        "movw %si, %ax\n"
+        "outb %al, %dx\n"
+        "ret\n");
 }
 
-void port_out_u16(uint16_t addr, uint16_t data) {
-    asm("movw %[addr], %%dx\n"
-        "movw %[data], %%ax\n"
-        "outw %%ax, %%dx\n"
-        :
-        : [data] "r"(data), [addr] "r"(addr)
-        : "dx", "ax");
+__attribute__((naked)) void port_out_u16(UNUSED uint16_t addr, UNUSED uint16_t data) {
+    asm("movw %di, %dx\n"
+        "movw %si, %ax\n"
+        "outw %ax, %dx\n"
+        "ret\n");
 }
 
-void port_out_u32(uint16_t addr, uint32_t data) {
-    asm("movw %[addr], %%dx\n"
-        "movl %[data], %%eax\n"
-        "outl %%eax, %%dx\n"
-        :
-        : [data] "r"(data), [addr] "r"(addr)
-        : "dx", "eax");
+__attribute__((naked)) void port_out_u32(UNUSED uint16_t addr, UNUSED uint32_t data) {
+    asm("movw %di, %dx\n"
+        "movl %esi, %eax\n"
+        "outl %eax, %dx\n"
+        "ret\n");
 }
 
-uint8_t port_in_u8(uint16_t addr) {
-    uint8_t data;
-    asm("movw %[addr], %%dx\n"
-        "inb %%dx, %%al\n"
-        "movb %%al, %[data]\n"
-        : [data] "=r"(data)
-        : [addr] "r"(addr)
-        : "dx", "al");
-    return data;
+__attribute__((naked)) uint8_t port_in_u8(UNUSED uint16_t addr) {
+    asm("movw %di, %dx\n"
+        "inb %dx, %al\n"
+        "ret\n");
 }
 
-uint16_t port_in_u16(uint16_t addr) {
-    uint16_t data;
-    asm("movw %[addr], %%dx\n"
-        "inw %%dx, %%ax\n"
-        "movw %%ax, %[data]\n"
-        : [data] "=r"(data)
-        : [addr] "r"(addr)
-        : "dx", "ax");
-    return data;
+__attribute__((naked)) uint16_t port_in_u16(UNUSED uint16_t addr) {
+    asm("movw %di, %dx\n"
+        "inw %dx, %ax\n"
+        "ret\n");
 }
 
-uint32_t port_in_u32(uint16_t addr) {
-    uint32_t data;
-    asm("movw %[addr], %%dx\n"
-        "inl %%dx, %%eax\n"
-        "movl %%eax, %[data]\n"
-        : [data] "=r"(data)
-        : [addr] "r"(addr)
-        : "dx", "eax");
-    return data;
+__attribute__((naked)) uint32_t port_in_u32(UNUSED uint16_t addr) {
+    asm("movw %di, %dx\n"
+        "inl %dx, %eax\n"
+        "ret\n");
 }
