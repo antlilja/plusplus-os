@@ -1,5 +1,7 @@
 #include "paging.h"
 
+#include <stdbool.h>
+
 // FLAGS TO BE APPLIED WHEN ALLOCATING NEW PAGETABLES
 #define PAGETABLE_DEFAULT (PAGING_PRESENT | PAGING_WRITABLE)
 

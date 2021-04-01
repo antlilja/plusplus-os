@@ -1,6 +1,6 @@
-//https://wiki.osdev.org/Paging         x86 2 layer paging
-//https://os.phil-opp.com/page-tables/  x64 4 layer paging
-//P4 P3 P2 P1 represent the different pagetable layers
+// https://wiki.osdev.org/Paging         x86 2 layer paging
+// https://os.phil-opp.com/page-tables/  x64 4 layer paging
+// P4 P3 P2 P1 represent the different pagetable layers
 
 /*
     This is currently set up to provide convenient way of creating pagetables, 
@@ -33,11 +33,9 @@
 
 #pragma once
 #include <stdint.h>
-#include <stdbool.h>
 
 typedef uint64_t PageFlags;
 typedef uint64_t PageEntry;
-
 
 #define GET_PAGE_FLAGS(page_entry) ((page_entry) & ~PAGING_PTRMASK)
 #define GET_PAGE_ADDRESS(page_entry) ((page_entry) & PAGING_PTRMASK)
@@ -57,24 +55,28 @@ typedef uint64_t PageEntry;
 
 #define PAGING_PTRMASK ((1UL << 48) - (1UL << 12))    //bits 48 - 12
 
-//returns the P4 pointer
+// returns the P4 pointer
 PageEntry* get_cr3();
 
-//sets the P4 pointer
+// sets the P4 pointer
 void set_cr3(PageEntry* P4);
 
 //maps all virtual addresses between virtaddr_low and virtaddr_high relatve to phys_low and makes sure they're in the pagetable
 //
-//ex:
-//map_pages(P4, 0x4000, 0x8000, 0x0000, PAGETABLE_DEFAULT)
-//will map all virtual addresses 0x4000 - 0x8000 to 0x0000 - 0x4000 using the flags in PAGETABLE_DEFAULT
-void map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t phys_low, uint64_t flags);
+// ex:
+// map_pages(P4, 0x4000, 0x8000, 0x0000, PAGETABLE_DEFAULT)
+// will map all virtual addresses 0x4000 - 0x8000 to 0x0000 - 0x4000 using the flags in
+// PAGETABLE_DEFAULT
+void map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t phys_low,
+               uint64_t flags);
 
-//identity maps any address between virtaddr_low and virtaddr_high and makes sure they're in the pagetable
-void identity_map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtaddr_high, uint64_t flags);
+// identity maps any address between virtaddr_low and virtaddr_high and makes sure they're in the
+// pagetable
+void identity_map_pages(PageEntry* table, uint64_t virtaddr_low, uint64_t virtaddr_high,
+                        uint64_t flags);
 
-//gets a pointer to the pagetable entry that maps virtaddr to physical space
-//returns 0 if virtaddr is unpaged
+// gets a pointer to the pagetable entry that maps virtaddr to physical space
+// returns 0 if virtaddr is unpaged
 PageEntry* fetch_page_entry(PageEntry* table, uint64_t virtaddr);
 
 // creates a new page table containing 512 entries

@@ -2,6 +2,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gdt.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/idt.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/paging.c
 )
 
@@ -18,6 +19,8 @@ target_compile_options(kernel PRIVATE
   -fno-builtin
   -fPIE
   -O2
+  -Wall
+  -Wextra
 )
 
 

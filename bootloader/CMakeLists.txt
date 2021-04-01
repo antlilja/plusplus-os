@@ -15,6 +15,8 @@ target_compile_options(bootloader PRIVATE
   -fshort-wchar
   -mno-red-zone
   -O2
+  -Wall
+  -Wextra
 )
 
 target_link_options(bootloader PRIVATE
