@@ -1,5 +1,4 @@
 #include "elf-loader.h"
-#include "efidef.h"
 
 #include <efi.h>
 #include <stdbool.h>
