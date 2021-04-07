@@ -20,6 +20,6 @@
 ```
 mkdir build
 cd build
-cmake .. -DUEFI_FIRMWARE=<path to OVMF.fd> -DQEMU_ARGS=<any extra qemu args>
+cmake .. -DUEFI_FIRMWARE=<path to OVMF.fd> -DQEMU_ARGS=<any extra qemu args> -DENABLE_KERNEL_ASSERTS=<ON or OFF>
 make run
 ```

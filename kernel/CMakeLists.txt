@@ -1,3 +1,5 @@
+option(ENABLE_KERNEL_ASSERTS "Enables asserts in the kernel" ON)
+
 add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering.c
@@ -33,5 +35,11 @@ target_link_options(kernel PRIVATE
   -nostdlib
   -T ${CMAKE_CURRENT_SOURCE_DIR}/linker.ld
 )
+
+if(ENABLE_KERNEL_ASSERTS)
+  target_compile_definitions(kernel PRIVATE
+    ENABLE_KERNEL_ASSERTS
+  )
+endif()
 
 target_compile_features(kernel PRIVATE c_std_11)
