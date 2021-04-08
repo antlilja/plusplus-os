@@ -9,12 +9,22 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/port_io.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pci.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cpuid.c
+
+  # Libc kernel sources
+  ${PROJECT_SOURCE_DIR}/libc/src/string/memcpy.c
+  ${PROJECT_SOURCE_DIR}/libc/src/string/memmove.c
+  ${PROJECT_SOURCE_DIR}/libc/src/string/memset.c
+  ${PROJECT_SOURCE_DIR}/libc/src/string/memcmp.c
+  ${PROJECT_SOURCE_DIR}/libc/src/string/strcmp.c
 )
 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/linker.ld)
 
 target_include_directories(kernel PRIVATE 
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+
+  # Libc kernel include
+  ${PROJECT_SOURCE_DIR}/libc/include
 )
 
 target_compile_options(kernel PRIVATE
@@ -27,7 +37,6 @@ target_compile_options(kernel PRIVATE
   -Wall
   -Wextra
 )
-
 
 target_link_options(kernel PRIVATE
   -target x86_64-pc-none-elf
