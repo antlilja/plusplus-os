@@ -4,15 +4,7 @@
 #include "idt.h"
 #include "cpuid.h"
 
-typedef struct {
-    uint64_t buffer_size;
-    uint8_t* buffer;
-    uint64_t mapkey;
-    uint64_t desc_size;
-    uint32_t desc_version;
-} __attribute__((packed)) MemoryMap;
-
-_Noreturn void kernel_entry(MemoryMap* mm, Framebuffer* fb) {
+_Noreturn void kernel_entry(void* mm, Framebuffer* fb) {
     // set frame buffer
     g_frame_buffer = fb;
     clear_screen(g_bg_color);
