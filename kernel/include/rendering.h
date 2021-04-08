@@ -19,7 +19,7 @@ typedef struct {
 
 extern uint32_t g_bg_color;
 extern uint32_t g_fg_color;
-extern Framebuffer* g_frame_buffer;
+extern Framebuffer g_frame_buffer;
 
 // Color pixel at pixel coordinates
 void put_pixel(uint64_t x, uint64_t y, uint32_t color);

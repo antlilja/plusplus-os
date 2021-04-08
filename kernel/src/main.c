@@ -1,12 +1,14 @@
-#include <stdint.h>
 #include "rendering.h"
 #include "gdt.h"
 #include "idt.h"
 #include "cpuid.h"
 
-_Noreturn void kernel_entry(void* mm, Framebuffer* fb) {
+#include <stdint.h>
+#include <string.h>
+
+_Noreturn void kernel_entry(void* mm, void* fb) {
     // set frame buffer
-    g_frame_buffer = fb;
+    memcpy((void*)&g_frame_buffer, (void*)fb, sizeof(g_frame_buffer));
     clear_screen(g_bg_color);
 
     put_string("       _     _____  _____  ", 10, 4);

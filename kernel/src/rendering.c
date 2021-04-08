@@ -1,19 +1,19 @@
 #include "rendering.h"
 #include "font.h"
 
-Framebuffer* g_frame_buffer;
+Framebuffer g_frame_buffer;
 uint32_t g_bg_color = 0x00000000;
 uint32_t g_fg_color = 0xffee2a7a;
 
 void put_pixel(uint64_t x, uint64_t y, uint32_t color) {
     // write to frame buffer, assumes 4 byte color.
-    *((uint32_t*)(g_frame_buffer->address + 4 * g_frame_buffer->pixels_per_scanline * y + 4 * x)) =
+    *((uint32_t*)(g_frame_buffer.address + 4 * g_frame_buffer.pixels_per_scanline * y + 4 * x)) =
         color;
 }
 
 void clear_screen(uint32_t color) {
-    for (uint64_t x = 0; x < g_frame_buffer->width; x++)
-        for (uint64_t y = 0; y < g_frame_buffer->height; y++) put_pixel(x, y, color);
+    for (uint64_t x = 0; x < g_frame_buffer.width; x++)
+        for (uint64_t y = 0; y < g_frame_buffer.height; y++) put_pixel(x, y, color);
 }
 
 void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg) {
