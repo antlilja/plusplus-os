@@ -30,4 +30,8 @@ SECTIONS
     		__stack_top__ = .;
 	}	
 
+	/DISCARD/ :
+	{
+		*(.interp)
+	}
 }
