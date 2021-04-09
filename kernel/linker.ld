@@ -1,4 +1,4 @@
-ENTRY (kernel_entry)
+ENTRY (stage1_kernel_entry)
 
 SECTIONS
 {
