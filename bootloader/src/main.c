@@ -62,8 +62,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
 
     // Load kernel ELF image, get entry point and stack addresses
     EFI_PHYSICAL_ADDRESS kernel_entry;
-    EFI_PHYSICAL_ADDRESS stack;
-    status = load_kernel(st, root, L"KERNEL.ELF", &kernel_entry, &stack);
+    status = load_kernel(st, root, L"KERNEL.ELF", &kernel_entry);
     if (EFI_ERROR(status)) return status;
 
     // Close file system
@@ -123,9 +122,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     if (EFI_ERROR(status)) return status;
 
     asm volatile(
-        // Setup stack and base pointer
-        "mov %[stack], %%rsp\n"
-        "mov %[stack], %%rbp\n"
         // Set up arguments in correct registers
         "mov %[memory_map], %%rdi\n"
         "mov %[frame_buffer], %%rsi\n"
@@ -134,7 +130,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
         : // No output
           // Input
         : [kernel_entry] "r"(kernel_entry),
-          [stack] "r"(stack),
           [memory_map] "r"(&memory_map),
           [frame_buffer] "r"(&frame_buffer)
         // Clobbers

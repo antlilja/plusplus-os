@@ -1,6 +1,7 @@
 option(ENABLE_KERNEL_ASSERTS "Enables asserts in the kernel" ON)
 
 add_executable(kernel
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/stage1_entry.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gdt.c
