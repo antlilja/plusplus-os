@@ -22,7 +22,15 @@ void setup_idt() {
     struct {
         uint16_t size;
         uint64_t base;
-    } __attribute__((packed)) idt = {.size = sizeof(g_idt) - 1, .base = (uint64_t)&g_idt};
+    } __attribute__((packed)) idt;
+
+    // TODO(Anton Lilja, 10-04-21):
+    // We have to do manual assignment here because the compiler might try to optimize in virtual
+    // address pointers at compile time otherwise.
+    // Find way to disable this optimization or
+    // make sure to map kernel correctly before any of this code.
+    idt.size = sizeof(g_idt);
+    idt.base = (uint64_t)&g_idt;
 
     asm(
         // Set IDT

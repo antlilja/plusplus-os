@@ -122,7 +122,15 @@ void setup_gdt_and_tss() {
     struct {
         uint16_t size;
         uint64_t base;
-    } __attribute__((packed)) gdt = {.size = sizeof(g_gdt) - 1, .base = (uint64_t)&g_gdt};
+    } __attribute__((packed)) gdt;
+
+    // TODO(Anton Lilja, 10-04-21):
+    // We have to do manual assignment here because the compiler might try to optimize in virtual
+    // address pointers at compile time otherwise.
+    // Find way to disable this optimization or
+    // make sure to map kernel correctly before any of this code.
+    gdt.size = sizeof(g_gdt);
+    gdt.base = (uint64_t)&g_gdt;
 
     set_gdt_and_tss((void*)&gdt);
 }

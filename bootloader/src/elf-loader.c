@@ -84,9 +84,6 @@ EFI_STATUS load_kernel(EFI_SYSTEM_TABLE* st, EFI_FILE* root, CHAR16* filename,
         if (file_header->e_ident[EI_DATA] == ELFDATA2MSB) return EFI_UNSUPPORTED;
     }
 
-    // Set entry point
-    *entry_point = (EFI_PHYSICAL_ADDRESS)file_header->e_entry;
-
     // Allocate memory for the program header
     Elf64_Phdr* program_headers;
     len = sizeof(Elf64_Phdr) * file_header->e_phnum;
@@ -101,20 +98,45 @@ EFI_STATUS load_kernel(EFI_SYSTEM_TABLE* st, EFI_FILE* root, CHAR16* filename,
     status = file->Read(file, &len, (void*)program_headers);
     if (EFI_ERROR(status)) return status;
 
+    // Get number of required kernel pages and the entry offset
+    UINT64 num_kernel_pages = 0;
+    UINT64 entry_point_offset = 0;
+    UINT64 low_virt_addr = 0xffffffffffffffffULL;
+    {
+        UINT64 high_virt_addr = 0;
+        UINTN loaded_segments = 0;
+        for (UINTN p = 0; p < file_header->e_phnum; ++p) {
+            Elf64_Phdr* header = &program_headers[p];
+            if (header->p_type == PT_LOAD) {
+                if (header->p_vaddr < low_virt_addr) low_virt_addr = header->p_vaddr;
+                if (header->p_vaddr > high_virt_addr)
+                    high_virt_addr = header->p_vaddr + header->p_memsz;
+                ++loaded_segments;
+            }
+        }
+
+        // If no segments were loaded then there was no executable code
+        if (loaded_segments == 0) return EFI_NOT_FOUND;
+
+        entry_point_offset = file_header->e_entry - low_virt_addr;
+
+        num_kernel_pages = EFI_SIZE_TO_PAGES(high_virt_addr - low_virt_addr);
+    }
+
+    // Allocate kernel pages
+    EFI_PHYSICAL_ADDRESS kernel_base_addr = 0;
+    status = st->BootServices->AllocatePages(
+        AllocateAnyPages, EfiLoaderCode, num_kernel_pages, &kernel_base_addr);
+    if (EFI_ERROR(status)) return status;
+
+    // Set kernel entry point
+    *entry_point = kernel_base_addr + entry_point_offset;
+
     // Read PT_LOAD segments into memory
-    UINTN loaded_segments = 0;
     for (UINTN p = 0; p < file_header->e_phnum; ++p) {
         Elf64_Phdr* header = &program_headers[p];
         if (header->p_type == PT_LOAD) {
-            EFI_MEMORY_TYPE mem_type = EfiLoaderData;
-            if (header->p_flags & PF_X) mem_type = EfiLoaderCode;
-
-            // Allocate pages for segment
-            status = st->BootServices->AllocatePages(AllocateAnyPages,
-                                                     mem_type,
-                                                     EFI_SIZE_TO_PAGES(header->p_memsz),
-                                                     (EFI_PHYSICAL_ADDRESS*)header->p_vaddr);
-            if (EFI_ERROR(status)) return status;
+            EFI_PHYSICAL_ADDRESS physical_addr = kernel_base_addr + header->p_vaddr - low_virt_addr;
 
             // File size and memory size can be different
             if (header->p_filesz > 0) {
@@ -124,20 +146,16 @@ EFI_STATUS load_kernel(EFI_SYSTEM_TABLE* st, EFI_FILE* root, CHAR16* filename,
 
                 // Read segment into memory
                 len = header->p_filesz;
-                status = file->Read(file, &len, (void*)header->p_vaddr);
+                status = file->Read(file, &len, (void*)physical_addr);
                 if (EFI_ERROR(status)) return status;
             }
 
             // Zero fill the remaining memory in the pages according to ELF spec
-            st->BootServices->SetMem((void*)(header->p_vaddr + header->p_filesz),
+            st->BootServices->SetMem((void*)(physical_addr + header->p_filesz),
                                      (UINTN)(header->p_memsz - header->p_filesz),
                                      0);
-            ++loaded_segments;
         }
     }
-
-    // If no segments were loaded then there was no executable code
-    if (loaded_segments == 0) return EFI_NOT_FOUND;
 
     // Free file header and program headers
     status = st->BootServices->FreePool(program_headers);
