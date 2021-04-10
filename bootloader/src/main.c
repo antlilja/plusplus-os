@@ -121,19 +121,23 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     status = st->BootServices->ExitBootServices(image_handle, memory_map.mapkey);
     if (EFI_ERROR(status)) return status;
 
-    asm volatile(
+    asm(
         // Set up arguments in correct registers
         "mov %[memory_map], %%rdi\n"
         "mov %[frame_buffer], %%rsi\n"
-        // Jump to entry point
-        "jmp *%[kernel_entry]\n"
+
+        // Push code segment and kernel entry addres onto stack and do a long return
+        "movw %%cs, %%ax\n"
+        "push %%rax\n"
+        "push %[kernel_entry]\n"
+        "lretq\n"
         : // No output
           // Input
         : [kernel_entry] "r"(kernel_entry),
           [memory_map] "r"(&memory_map),
           [frame_buffer] "r"(&frame_buffer)
         // Clobbers
-        : "rsp", "rbp", "rdi", "rsi");
+        : "rax", "rdi", "rsi");
 
     // This point will never be reached
     return EFI_LOAD_ERROR;
