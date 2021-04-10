@@ -43,6 +43,7 @@ target_link_options(kernel PRIVATE
   -target x86_64-pc-none-elf
   -ffreestanding
   -nostdlib
+  -Wl,--build-id=none
   -T ${CMAKE_CURRENT_SOURCE_DIR}/linker.ld
 )
 
