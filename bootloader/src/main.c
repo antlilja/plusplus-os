@@ -115,6 +115,16 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
                                                 &memory_map.desc_size,
                                                 &memory_map.desc_version);
         if (EFI_ERROR(status)) return status;
+
+        // Make the kernel be the only memory range with the type EfiLoaderCode
+        for (UINT64 i = 0; i < memory_map.nbytes; i += memory_map.desc_size) {
+            EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)&memory_map.buffer[i];
+            if (desc->Type == EfiLoaderCode &&
+                !(kernel_entry >= desc->PhysicalStart &&
+                  kernel_entry < desc->PhysicalStart + desc->NumberOfPages * EFI_PAGE_SIZE)) {
+                desc->Type = EfiLoaderData;
+            }
+        }
     }
 
     // Exit boot services before handing over control to the kernel
