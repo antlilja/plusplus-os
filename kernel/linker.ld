@@ -1,8 +1,11 @@
 ENTRY (stage1_kernel_entry)
 
+KERNEL_PML4_INDEX = 480;
+KERNEL_VIRTUAL_START = KERNEL_PML4_INDEX * 0x8000000000 + 0x1000;
+
 SECTIONS
 {
-	. = 1M;
+	. = KERNEL_VIRTUAL_START;
 
 	.text : ALIGN (4K)
 	{
@@ -23,11 +26,6 @@ SECTIONS
 	{
 		*(COMMON)
 		*(.bss*)
-
-		. = ALIGN (16);
-    		__stack_bottom__ = .;
-    		. += 0x4000;
-    		__stack_top__ = .;
 	}	
 
 	/DISCARD/ :
