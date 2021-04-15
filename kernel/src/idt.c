@@ -29,7 +29,7 @@ void setup_idt() {
     // address pointers at compile time otherwise.
     // Find way to disable this optimization or
     // make sure to map kernel correctly before any of this code.
-    idt.size = sizeof(g_idt);
+    idt.size = sizeof(g_idt) - 1;
     idt.base = (uint64_t)&g_idt;
 
     asm(

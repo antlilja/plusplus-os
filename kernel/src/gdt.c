@@ -129,7 +129,7 @@ void setup_gdt_and_tss() {
     // address pointers at compile time otherwise.
     // Find way to disable this optimization or
     // make sure to map kernel correctly before any of this code.
-    gdt.size = sizeof(g_gdt);
+    gdt.size = sizeof(g_gdt) - 1;
     gdt.base = (uint64_t)&g_gdt;
 
     set_gdt_and_tss((void*)&gdt);
