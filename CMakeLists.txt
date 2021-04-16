@@ -26,6 +26,6 @@ add_custom_target(image
   VERBATIM)
 
 add_custom_target(run
-  COMMAND qemu-system-x86_64 ${QEMU_ARGS} -bios ${UEFI_FIRMWARE} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
+  COMMAND qemu-system-x86_64 ${QEMU_ARGS} -machine q35 -bios ${UEFI_FIRMWARE} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
   DEPENDS image
   VERBATIM)
