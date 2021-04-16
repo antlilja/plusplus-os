@@ -27,6 +27,16 @@ void put_pixel(uint64_t x, uint64_t y, uint32_t color);
 // Put character at character coordinates
 void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg);
 
+// Put value in binary at character coordinates
+// returns the number of characters written (including 0b)
+uint64_t put_binary(uint64_t value, uint64_t x, uint64_t y);
+
+// Put exact amount of bits at character coordinates
+void put_binary_len(uint64_t value, uint64_t x, uint64_t y, uint8_t bits);
+
+void put_binary_32(uint64_t value, uint64_t x, uint64_t y);
+void put_binary_64(uint64_t value, uint64_t x, uint64_t y);
+
 // Put value in hex at character coordinates
 // returns the number of characters written (including 0x)
 uint64_t put_hex(uint64_t value, uint64_t x, uint64_t y);
