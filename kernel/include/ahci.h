@@ -84,3 +84,7 @@ typedef struct {
     // Maximum Latency
     uint8_t latency;
 } AHCI_CONTROLLER;
+
+// Commands from https://wiki.osdev.org/ATA_Command_Matrix
+#define ATA_COMMAND_READ_DMA_EXT 0x25
+#define ATA_COMMAND_IDENTIFY 0xEC
