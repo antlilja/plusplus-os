@@ -122,13 +122,29 @@ typedef struct UhciController {
 } UhciController;
 
 // ---------------------------------------------------------------------------------------
-
+void print_io_reg(uint16_t io_address) {
+    put_string("REG_CMD", 10, 16);
+    put_string("REG_STS", 10, 17);
+    put_string("REG_INTR", 10, 18);
+    put_string("REG_FRNUM", 10, 19);
+    put_string("REG_FRBASEADD", 10, 20);
+    put_string("REG_SOFMOD", 10, 21);
+    put_string("REG_PORTSC1", 10, 22);
+    put_string("REG_PORTSC2", 10, 23);
+    put_hex_32(port_in_u16(io_address + REG_CMD), 30, 16);
+    put_hex_32(port_in_u16(io_address + REG_STS), 30, 17);
+    put_hex_32(port_in_u16(io_address + REG_INTR), 30, 18);
+    put_hex_32(port_in_u16(io_address + REG_FRNUM), 30, 19);
+    put_hex_32(port_in_u32(io_address + REG_FRBASEADD), 30, 20);
+    put_hex_32(port_in_u8(io_address + REG_SOFMOD), 30, 21);
+    put_hex_32(port_in_u16(io_address + REG_PORTSC1), 30, 22);
+    put_hex_32(port_in_u16(io_address + REG_PORTSC2), 30, 23);
+}
 void UhciInit() {
     uint32_t device_address =
         pci_find_next_device(UHCI_CONTROLLER_ADDRESS, UHCI_CONTROLLER_MASK, 0);
     uint16_t io_address =
         pci_read_config_u32(device_address, BAR4_OFFSET) & ~0x3; // Add better function in pci
-
     // // Controller initialization
     // UhciController *hc = VMAlloc(sizeof(UhciController));
     // hc->io_address = io_address;
@@ -176,8 +192,7 @@ void UhciInit() {
     // put_hex_64(io_address+REG_FRBASEADD, 10, 14);
 
     while (1) {
-        put_string("FRBASEADD", 10, 16);
-        put_hex_16(port_in_u16(io_address + 0x20), 30, 16);
+        print_io_reg(io_address);
     }
 }
 
