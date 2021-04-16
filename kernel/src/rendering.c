@@ -27,7 +27,7 @@ void put_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg) {
     }
 }
 
-uint64_t put_string(char* str, uint64_t x, uint64_t y) {
+uint64_t put_string(const char* str, uint64_t x, uint64_t y) {
     uint64_t i = 0;
     while (str[i] != 0) {
         if (str[i] >= '!' && str[i] < '~') put_char(str[i], x + i, y, g_fg_color, g_bg_color);

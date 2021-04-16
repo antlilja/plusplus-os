@@ -44,4 +44,4 @@ void put_hex_64(uint64_t value, uint64_t x, uint64_t y);
 void clear_screen(uint32_t color);
 
 // Put string at character coordinates and return length
-uint64_t put_string(char* str, uint64_t x, uint64_t y);
+uint64_t put_string(const char* str, uint64_t x, uint64_t y);
