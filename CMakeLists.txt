@@ -26,6 +26,6 @@ add_custom_target(image
   VERBATIM)
 
 add_custom_target(run
-  COMMAND qemu-system-x86_64 ${QEMU_ARGS} -bios ${UEFI_FIRMWARE} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
+  COMMAND qemu-system-x86_64 ${QEMU_ARGS} -bios ${UEFI_FIRMWARE} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -usb -device usb-host,hostbus=2,hostaddr=1
   DEPENDS image
   VERBATIM)
