@@ -2,6 +2,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include "cpuid.h"
+#include "usb.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -29,6 +30,8 @@ _Noreturn void kernel_entry(void* mm, void* fb) {
     // They can be registered using the register_interrupt(...) function
     setup_idt();
     put_string("Interrupt descriptor table initalized", 10, 11);
+
+    UhciInit(); 
 
     // This function can't return
     while (1)
