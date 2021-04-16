@@ -37,6 +37,14 @@ void put_binary_len(uint64_t value, uint64_t x, uint64_t y, uint8_t bits);
 void put_binary_32(uint64_t value, uint64_t x, uint64_t y);
 void put_binary_64(uint64_t value, uint64_t x, uint64_t y);
 
+// Put value in decimal at character coordinates
+// returns the number of characters written (including '-')
+uint64_t put_int(int64_t value, uint64_t x, uint64_t y);
+
+// Put value in decimal at character coordinates
+// returns the number of characters written
+uint64_t put_uint(uint64_t value, uint64_t x, uint64_t y);
+
 // Put value in hex at character coordinates
 // returns the number of characters written (including 0x)
 uint64_t put_hex(uint64_t value, uint64_t x, uint64_t y);

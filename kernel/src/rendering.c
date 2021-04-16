@@ -65,6 +65,48 @@ void put_binary_len(uint64_t value, uint64_t x, uint64_t y, uint8_t bits) {
 void put_binary_32(uint64_t value, uint64_t x, uint64_t y) { put_binary_len(value, x, y, 32); }
 void put_binary_64(uint64_t value, uint64_t x, uint64_t y) { put_binary_len(value, x, y, 64); }
 
+uint64_t put_int(int64_t value, uint64_t x, uint64_t y) {
+    if (value < 0) {
+        put_char('-', x, y, g_fg_color, g_bg_color);
+        return put_uint(-value, x + 1, y) + 1;
+    }
+
+    return put_uint(value, x, y);
+}
+
+uint64_t put_uint(uint64_t value, uint64_t x, uint64_t y) {
+    if (value == 0) {
+        put_char('0', x, y, g_fg_color, g_bg_color);
+        return 1;
+    }
+
+    char buf[21];
+    char* ptr = buf;
+
+    while (value != 0) {
+        uint8_t rem = value % 10;
+        *ptr = '0' + rem;
+        ++ptr;
+        value /= 10;
+    }
+
+    *ptr = '\0';
+
+    // Reverse string
+    char* begin = buf;
+    char* end = ptr - 1;
+    while (begin < end) {
+        char tmp = *begin;
+        *begin = *end;
+        *end = tmp;
+        ++begin;
+        --end;
+    }
+
+    put_string(buf, x, y);
+    return ptr - buf;
+}
+
 void put_hex_len(uint64_t value, uint64_t x, uint64_t y, uint64_t nibbles) {
     put_char('0', x, y, g_fg_color, g_bg_color);
     put_char('x', x + 1, y, g_fg_color, g_bg_color);
