@@ -76,7 +76,7 @@ typedef struct {
     uint32_t ebx;
     uint32_t ecx;
     uint32_t edx;
-} __attribute__((packed)) CPUFeatures;
+} CPUFeatures;
 
 extern CPUFeatures g_cpu_features;
 
