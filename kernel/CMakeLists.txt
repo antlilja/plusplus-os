@@ -9,7 +9,6 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/paging.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/port_io.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pci.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/cpuid.c
 
   # Libc kernel sources
   ${PROJECT_SOURCE_DIR}/libc/src/string/memcpy.c

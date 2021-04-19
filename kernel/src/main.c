@@ -1,7 +1,6 @@
 #include "rendering.h"
 #include "gdt.h"
 #include "idt.h"
-#include "cpuid.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -17,7 +16,6 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     put_string("|_   _|_|   |_____||_____| ", 10, 7);
     put_string("  |_|               Week-1 ", 10, 8);
 
-    initialize_cpu_features();
 
     // This disables interrupts
     // They can be turned back on after setting up the IDT
