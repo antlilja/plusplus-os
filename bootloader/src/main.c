@@ -1,6 +1,7 @@
 #include <efi.h>
 
 #include "elf-loader.h"
+#include "rsdp-finder.h"
 
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     EFI_STATUS status;
@@ -69,6 +70,12 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
     status = root->Close(root);
     if (EFI_ERROR(status)) return status;
 
+    // Find Root System Description Pointer
+    EFI_PHYSICAL_ADDRESS rsdp_addr;
+
+    status = find_rsdp(st, &rsdp_addr);
+    if (EFI_ERROR(status)) return status;
+
     // Get the memory map
     struct {
         UINT64 nbytes;
@@ -135,6 +142,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
         // Set up arguments in correct registers
         "mov %[memory_map], %%rdi\n"
         "mov %[frame_buffer], %%rsi\n"
+        "mov %[rsdp_addr], %%rdx\n"
 
         // Push code segment and kernel entry addres onto stack and do a long return
         "movw %%cs, %%ax\n"
@@ -143,11 +151,12 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* st) {
         "lretq\n"
         : // No output
           // Input
-        : [kernel_entry] "r"(kernel_entry),
-          [memory_map] "r"(&memory_map),
-          [frame_buffer] "r"(&frame_buffer)
+        : [ kernel_entry ] "r"(kernel_entry),
+          [ memory_map ] "r"(&memory_map),
+          [ frame_buffer ] "r"(&frame_buffer),
+          [ rsdp_addr ] "r"(rsdp_addr)
         // Clobbers
-        : "rax", "rdi", "rsi");
+        : "rax", "rdi", "rsi", "rdx");
 
     // This point will never be reached
     return EFI_LOAD_ERROR;

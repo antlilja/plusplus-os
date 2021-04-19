@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
-_Noreturn void kernel_entry(void* mm, void* fb) {
+_Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     // set frame buffer
     memcpy((void*)&g_frame_buffer, (void*)fb, sizeof(g_frame_buffer));
     clear_screen(g_bg_color);
