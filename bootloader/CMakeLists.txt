@@ -1,6 +1,7 @@
 add_executable(bootloader
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/elf-loader.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/rsdp-finder.c
 )
 
 target_include_directories(bootloader PRIVATE 
