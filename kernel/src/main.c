@@ -6,7 +6,7 @@
 #include <string.h>
 
 _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
-    // set frame buffer
+    // Set frame buffer
     memcpy((void*)&g_frame_buffer, (void*)fb, sizeof(g_frame_buffer));
     clear_screen(g_bg_color);
 
@@ -16,11 +16,8 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     put_string("|_   _|_|   |_____||_____| ", 10, 7);
     put_string("  |_|               Week-1 ", 10, 8);
 
-
     // This disables interrupts
-    // They can be turned back on after setting up the IDT
     setup_gdt_and_tss();
-
     put_string("Global descriptor table initalized", 10, 10);
 
     // Interrupts are enabled here.
