@@ -1,4 +1,5 @@
 #include "rendering.h"
+#include "frame_allocator.h"
 #include "gdt.h"
 #include "idt.h"
 
@@ -15,6 +16,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     put_string(" _| |_   _| |  |  ||___  | ", 10, 6);
     put_string("|_   _|_|   |_____||_____| ", 10, 7);
     put_string("  |_|               Week-1 ", 10, 8);
+
+    initialize_frame_allocator(mm);
+    put_string("Frame allocator initalized", 10, 9);
 
     // This disables interrupts
     setup_gdt_and_tss();
