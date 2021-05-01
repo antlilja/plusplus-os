@@ -25,16 +25,20 @@ void fill_memory_entry_pool(VirtualAddress addr, uint64_t pages) {
 
 MemoryEntry* get_memory_entry() {
     if (g_memory_entry_pool.count < ENTRY_THRESHOLD) {
-        PhysicalAddress addr = 0;
+        g_memory_entry_pool.count += 20;
+
+        PhysicalAddress addr;
         bool success = alloc_frames_contiguos(0, &addr);
 
         // TODO(Anton Lilja, 01/05/2021):
         // This is temporary and only required because we're using physical addressing,
         // The next member in MemoryEntry has to be able to be 0 to indicate end of list.
-        if (addr == 0 && success) {
+        if (success && addr == 0) {
             success = alloc_frames_contiguos(0, &addr);
             free_frames_contiguos(0, 0);
         }
+
+        g_memory_entry_pool.count -= 20;
 
         KERNEL_ASSERT(success, "Out of memory")
         fill_memory_entry_pool(addr, 1);
