@@ -1,5 +1,5 @@
 #include "rendering.h"
-#include "frame_allocator.h"
+#include "memory/frame_allocator.h"
 #include "gdt.h"
 #include "idt.h"
 

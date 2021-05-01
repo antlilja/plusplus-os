@@ -1,4 +1,4 @@
-#include "frame_allocator.h"
+#include "memory/frame_allocator.h"
 
 #include "memory.h"
 #include "uefi.h"
