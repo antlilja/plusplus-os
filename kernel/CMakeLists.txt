@@ -12,6 +12,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pci.c
 
   # Memory
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/frame_allocator.c
 
   # Libc kernel sources

@@ -5,3 +5,5 @@
 
 typedef uint64_t PhysicalAddress;
 typedef uint64_t VirtualAddress;
+
+void initialize_memory(void* uefi_memory_map);
