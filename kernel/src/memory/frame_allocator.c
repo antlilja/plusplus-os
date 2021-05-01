@@ -1,9 +1,10 @@
-#include "frame_allocator.h"
+#include "memory/frame_allocator.h"
 
-#include "memory.h"
 #include "uefi.h"
 #include "util.h"
 #include "kassert.h"
+#include "memory.h"
+#include "memory/entry_pool.h"
 
 #include <string.h>
 
@@ -22,10 +23,6 @@ struct {
     uint64_t* buddy_map;
 } g_free_lists[ORDERS] = {0};
 
-// Linked list of unused entries
-ListEntry* g_entry_pool = 0;
-
-uint64_t g_memory_size = 0;
 uint64_t g_block_sizes[ORDERS];
 
 // Calculate array index and bit index for buddy corresponding to address and order
@@ -60,52 +57,12 @@ void toggle_buddy_bit(uint64_t addr, uint8_t order) {
     g_free_lists[order].buddy_map[arr_index] ^= (1ULL << bit_index);
 }
 
-void split_entry(ListEntry* entry, uint8_t order);
-
-ListEntry* get_list_entry() {
-    _Static_assert(MIN_BLOCK_SIZE % sizeof(ListEntry) == 0,
-                   "MIN_BLOCK_SIZE not divisable by size of List Entry");
-
-    // Allocate a min size block of list entries if none are available
-    if (g_entry_pool == 0) {
-        int8_t order = 0;
-        while (order < ORDERS) {
-            if (g_free_lists[order].head != 0) break;
-            ++order;
-        }
-
-        KERNEL_ASSERT(order < ORDERS, "Out of memory")
-
-        // Populate entry pool
-        PhysicalAddress addr = g_free_lists[order].head->addr;
-        for (uint64_t i = 0; i < MIN_BLOCK_SIZE / sizeof(ListEntry); ++i) {
-            ListEntry* head = (ListEntry*)addr;
-            head->next = g_entry_pool;
-            g_entry_pool = head;
-            addr += sizeof(ListEntry);
-        }
-
-        // Split blocks
-        while (order > 0) {
-            split_entry(g_free_lists[order].head, order);
-            --order;
-        }
-    }
-
-    // Remove entry from pool
-    ListEntry* entry = g_entry_pool;
-    g_entry_pool = entry->next;
-
-    entry->next = 0;
-    return entry;
-}
-
 void split_entry(ListEntry* entry, uint8_t order) {
     // Toogle buddy bit to mark block as allocated
     toggle_buddy_bit(entry->addr, order);
 
     ListEntry* left = entry;
-    ListEntry* right = get_list_entry();
+    ListEntry* right = (ListEntry*)get_memory_entry();
 
     right->addr = left->addr + g_block_sizes[order - 1];
     right->next = g_free_lists[order - 1].head;
@@ -259,9 +216,7 @@ void free_frames(PageFrameAllocation* allocation) {
                 entry = tmp;
             }
 
-            // Put list entry back into pool
-            buddy_entry->next = g_entry_pool;
-            g_entry_pool = buddy_entry;
+            free_memory_entry((MemoryEntry*)buddy_entry);
 
             // Put entry in free list
             entry->next = g_free_lists[order + 1].head;
@@ -302,9 +257,7 @@ bool alloc_frames_contiguos(uint8_t order_to_alloc, PhysicalAddress* out_addr) {
     // Remove block from free list
     g_free_lists[order_to_alloc].head = entry->next;
 
-    // Put entry back into pool
-    entry->next = g_entry_pool;
-    g_entry_pool = entry;
+    free_memory_entry((MemoryEntry*)entry);
 
     // Mark block as allocated
     toggle_buddy_bit(entry->addr, order_to_alloc);
@@ -314,7 +267,7 @@ bool alloc_frames_contiguos(uint8_t order_to_alloc, PhysicalAddress* out_addr) {
 }
 
 void free_frames_contiguos(PhysicalAddress addr, uint8_t order) {
-    PageFrameAllocation* allocation = (PageFrameAllocation*)get_list_entry();
+    PageFrameAllocation* allocation = (PageFrameAllocation*)get_memory_entry();
     allocation->addr = addr;
     allocation->order = order;
 
@@ -371,8 +324,7 @@ bool remove_range(PhysicalAddress addr, uint64_t pages) {
                 // Toogle buddy bit to mark block as allocated
                 toggle_buddy_bit(curr_entry->addr, order);
 
-                curr_entry->next = g_entry_pool;
-                g_entry_pool = curr_entry;
+                free_memory_entry((MemoryEntry*)curr_entry);
                 break;
             }
             // Split entry into two entries one order lower
@@ -400,14 +352,6 @@ void initialize_frame_allocator(void* uefi_memory_map) {
         g_block_sizes[i] = g_block_sizes[i - 1] * 2;
     }
 
-    // Calculate memory size
-    const UEFIMemoryMap* memory_map = (UEFIMemoryMap*)uefi_memory_map;
-    for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {
-        const UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];
-        PhysicalAddress high_addr = desc->physical_start + desc->num_pages * PAGE_SIZE;
-        if (high_addr > g_memory_size) g_memory_size = high_addr;
-    }
-
     // Calculate size required by bitmaps
     uint64_t total_bitmaps_size = 0;
     uint64_t bitmap_sizes[ORDERS];
@@ -415,14 +359,14 @@ void initialize_frame_allocator(void* uefi_memory_map) {
     {
         // List entries required at start by all order 7 blocks
         // We double the amount of free list entries required at the start
-        const uint64_t list_entries = (g_memory_size / g_block_sizes[ORDERS - 1]) * 2;
+        const uint64_t list_entries = (get_memory_size() / g_block_sizes[ORDERS - 1]) * 2;
 
         // Bytes required by free_list_entries rounded to the closest page size multiple
         entry_pool_block_size = round_up_to_multiple(list_entries * sizeof(ListEntry), PAGE_SIZE);
 
         // Calculate memory required by bitmaps
         for (int i = 0; i < (ORDERS - 1); ++i) {
-            bitmap_sizes[i] = g_memory_size / g_block_sizes[i];
+            bitmap_sizes[i] = get_memory_size() / g_block_sizes[i];
             total_bitmaps_size += bitmap_sizes[i];
         }
 
@@ -432,6 +376,8 @@ void initialize_frame_allocator(void* uefi_memory_map) {
 
     // The total pages to allocate for the entry pool and the bitmaps
     const uint64_t allocator_pages = (entry_pool_block_size + total_bitmaps_size) / PAGE_SIZE;
+
+    const UEFIMemoryMap* memory_map = (UEFIMemoryMap*)uefi_memory_map;
 
     // Allocate memory for free lists and bitmaps
     PhysicalAddress allocator_phys_addr;
@@ -469,16 +415,8 @@ void initialize_frame_allocator(void* uefi_memory_map) {
     // Populate entry pool and buddy maps
     {
         PhysicalAddress curr_addr = allocator_phys_addr;
-        g_entry_pool = (ListEntry*)curr_addr;
-        curr_addr += sizeof(ListEntry);
-
-        // Populate entry pool
-        for (uint64_t i = 1; i < entry_pool_block_size / sizeof(ListEntry); ++i) {
-            ListEntry* head = (ListEntry*)curr_addr;
-            head->next = g_entry_pool;
-            g_entry_pool = head;
-            curr_addr += sizeof(ListEntry);
-        }
+        fill_memory_entry_pool(curr_addr, entry_pool_block_size / PAGE_SIZE);
+        curr_addr += entry_pool_block_size;
 
         // Populate buddy maps
         for (uint64_t i = 0; i < (ORDERS - 1); ++i) {
@@ -492,16 +430,16 @@ void initialize_frame_allocator(void* uefi_memory_map) {
         PhysicalAddress curr_addr = 0;
 
         // Add first entry to free list
-        ListEntry* curr_entry = get_list_entry();
+        ListEntry* curr_entry = (ListEntry*)get_memory_entry();
         curr_entry->addr = curr_addr;
         curr_addr += g_block_sizes[ORDERS - 1];
         g_free_lists[ORDERS - 1].head = curr_entry;
 
-        const uint64_t block_count = g_memory_size / g_block_sizes[ORDERS - 1];
+        const uint64_t block_count = get_memory_size() / g_block_sizes[ORDERS - 1];
         for (uint64_t i = 1; i < block_count; ++i) {
-            if (curr_addr >= g_memory_size) break;
+            if (curr_addr >= get_memory_size()) break;
 
-            ListEntry* next_entry = get_list_entry();
+            ListEntry* next_entry = (ListEntry*)get_memory_entry();
             next_entry->addr = curr_addr;
             curr_addr += g_block_sizes[ORDERS - 1];
 

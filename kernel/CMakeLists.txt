@@ -5,12 +5,16 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/util.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/frame_allocator.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gdt.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/idt.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/paging.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/port_io.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pci.c
+
+  # Memory
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/frame_allocator.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/entry_pool.c
 
   # Libc kernel sources
   ${PROJECT_SOURCE_DIR}/libc/src/string/memcpy.c
