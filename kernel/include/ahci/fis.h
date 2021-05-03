@@ -14,8 +14,6 @@
 #define FIS_TYPE_PIO_SETUP 0x5F // PIO setup FIS - device to host
 #define FIS_TYPE_DEV_BITS 0xA1  // Set device bits FIS - device to host
 
-#define PDRT_LEN 8
-
 typedef struct {
     uint8_t fis_type; // FIS_TYPE_REG_H2D
 
