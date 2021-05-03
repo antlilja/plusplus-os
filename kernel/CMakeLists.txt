@@ -7,7 +7,6 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/util.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gdt.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/idt.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/paging.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/port_io.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pci.c
 
