@@ -131,7 +131,7 @@ typedef struct {
     uint8_t control_reg; // Control register
 
     uint32_t _rsv1; // Reserved
-} FISRegD2H;
+} FISRegH2D;
 
 typedef struct {
     uint8_t fis_type; // FIS_TYPE_REG_D2H
@@ -159,7 +159,7 @@ typedef struct {
     uint16_t _rsv2;
 
     uint32_t _rsv3;
-} FISRegH2D;
+} FISRegD2H;
 
 typedef volatile struct {
     uint64_t cmd_list_base;     // 0x00, command list base address, 1K-byte aligned // 64 or 2*32?
