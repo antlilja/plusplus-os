@@ -25,9 +25,9 @@ SECTIONS
 		*(.bss*)
 
 		. = ALIGN (16);
-    		__stack_bottom__ = .;
-    		. += 0x4000;
-    		__stack_top__ = .;
+    		s_stack_bottom = .;
+    		. += STACK_SIZE;
+    		s_stack_top = .;
 	}	
 
 	/DISCARD/ :
