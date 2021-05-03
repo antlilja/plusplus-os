@@ -25,6 +25,11 @@ struct {
 
 uint64_t g_block_sizes[ORDERS];
 
+uint64_t get_order_block_size(uint8_t order) {
+    KERNEL_ASSERT(order < ORDERS, "Not an order")
+    return g_block_sizes[order];
+}
+
 // Calculate array index and bit index for buddy corresponding to address and order
 void calc_buddy_index(uint64_t addr, uint8_t order, uint64_t* arr_index, uint8_t* bit_index) {
     KERNEL_ASSERT(order < (ORDERS - 1), "Order does not have a buddy map")

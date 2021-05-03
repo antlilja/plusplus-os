@@ -12,6 +12,8 @@ typedef struct {
 } PageFrameAllocation;
 
 void initialize_frame_allocator(void* uefi_memory_map);
+// Get the size of blocks of specified order
+uint64_t get_order_block_size(uint8_t order);
 
 // Allocate page frames (allocation may consist of several non-contiguos blocks)
 // Underlying memory for PageFrameAllocation structs is owned by the allocator
