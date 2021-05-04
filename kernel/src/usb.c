@@ -206,9 +206,9 @@ void UhciInit() {
     // put_hex_64(frame_list_base_address, 10, 13);
     // put_hex_64(io_address + REG_FRBASEADD, 10, 14);
 
-    // while (1) {
-    //     print_io_reg(io_address);
-    // }
+    while (1) {
+        print_io_reg(io_address);
+    }
 }
 
 /*

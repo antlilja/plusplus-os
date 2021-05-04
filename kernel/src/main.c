@@ -31,7 +31,7 @@ _Noreturn void kernel_entry(void* mm, void* fb) {
     setup_idt();
     put_string("Interrupt descriptor table initalized", 10, 11);
 
-    UhciInit();
+    Ps2Init();
 
     // This function can't return
     while (1)
