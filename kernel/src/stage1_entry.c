@@ -1,4 +1,4 @@
-extern char __stack_top__;
+extern char s_stack_top;
 extern char kernel_entry;
 
 __attribute__((naked)) void stage1_kernel_entry() {
@@ -11,7 +11,7 @@ __attribute__((naked)) void stage1_kernel_entry() {
         "jmp *%[kernel_entry]\n"
         : // No output
           // Input
-        : [stack] "r"(&__stack_top__), [kernel_entry] "r"(&kernel_entry)
+        : [stack] "r"(&s_stack_top), [kernel_entry] "r"(&kernel_entry)
         // Clobbers
         : "rsp", "rbp");
 }

@@ -25,6 +25,11 @@ struct {
 
 uint64_t g_block_sizes[ORDERS];
 
+uint64_t get_order_block_size(uint8_t order) {
+    KERNEL_ASSERT(order < ORDERS, "Not an order")
+    return g_block_sizes[order];
+}
+
 // Calculate array index and bit index for buddy corresponding to address and order
 void calc_buddy_index(uint64_t addr, uint8_t order, uint64_t* arr_index, uint8_t* bit_index) {
     KERNEL_ASSERT(order < (ORDERS - 1), "Order does not have a buddy map")
@@ -341,11 +346,8 @@ bool remove_range(PhysicalAddress addr, uint64_t pages) {
     return true;
 }
 
-void initialize_frame_allocator(void* uefi_memory_map) {
-    _Static_assert(sizeof(ListEntry) == 16, "Size of ListEntry is not 16 bytes");
-    _Static_assert(sizeof(PageFrameAllocation) == 16,
-                   "Size of PageFrameAllocation is not 16 bytes");
-
+void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_addr,
+                                  uint64_t* total_pages, uint64_t* entry_pool_pages) {
     // Calculate block sizes
     g_block_sizes[0] = MIN_BLOCK_SIZE;
     for (uint64_t i = 1; i < ORDERS; ++i) {
@@ -354,74 +356,70 @@ void initialize_frame_allocator(void* uefi_memory_map) {
 
     // Calculate size required by bitmaps
     uint64_t total_bitmaps_size = 0;
-    uint64_t bitmap_sizes[ORDERS];
-    uint64_t entry_pool_block_size;
     {
-        // List entries required at start by all order 7 blocks
+        // List entries required at start by all max order blocks
         // We double the amount of free list entries required at the start
-        const uint64_t list_entries = (get_memory_size() / g_block_sizes[ORDERS - 1]) * 2;
+        const uint64_t free_list_entries = (get_memory_size() / g_block_sizes[ORDERS - 1]) * 2;
 
-        // Bytes required by free_list_entries rounded to the closest page size multiple
-        entry_pool_block_size = round_up_to_multiple(list_entries * sizeof(ListEntry), PAGE_SIZE);
+        *entry_pool_pages =
+            round_up_to_multiple(free_list_entries * sizeof(ListEntry), PAGE_SIZE) / PAGE_SIZE;
 
         // Calculate memory required by bitmaps
         for (int i = 0; i < (ORDERS - 1); ++i) {
-            bitmap_sizes[i] = get_memory_size() / g_block_sizes[i];
-            total_bitmaps_size += bitmap_sizes[i];
+            total_bitmaps_size += get_memory_size() / g_block_sizes[i];
         }
 
-        // Round to closest multiple of PAGE_SIZE
-        total_bitmaps_size = round_up_to_multiple(total_bitmaps_size, PAGE_SIZE);
+        total_bitmaps_size = round_up_to_multiple(total_bitmaps_size, PAGE_SIZE) / PAGE_SIZE;
     }
 
     // The total pages to allocate for the entry pool and the bitmaps
-    const uint64_t allocator_pages = (entry_pool_block_size + total_bitmaps_size) / PAGE_SIZE;
-
-    const UEFIMemoryMap* memory_map = (UEFIMemoryMap*)uefi_memory_map;
+    *total_pages = *entry_pool_pages + total_bitmaps_size;
 
     // Allocate memory for free lists and bitmaps
-    PhysicalAddress allocator_phys_addr;
-    {
-        bool found = false;
-        for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {
-            UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];
+    *phys_addr = 0;
+    const UEFIMemoryMap* memory_map = (UEFIMemoryMap*)uefi_memory_map;
+    for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {
+        UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];
 
-            // Other memory types are either unusable or have memory that is currently being used
-            const bool correct_type = desc->type == EfiConventionalMemory ||
-                                      desc->type == EfiRuntimeServicesCode ||
-                                      desc->type == EfiBootServicesCode;
+        // Other memory types are either unusable or have memory that is currently being used
+        const bool correct_type = desc->type == EfiConventionalMemory ||
+                                  desc->type == EfiRuntimeServicesCode ||
+                                  desc->type == EfiBootServicesCode;
 
-            if (!correct_type) continue;
+        if (!correct_type) continue;
 
-            // Skip memory before 1MB
-            if (desc->physical_start < 0x100000) continue;
+        // Skip memory before 1MB
+        if (desc->physical_start < 0x100000) continue;
 
-            if (desc->num_pages < allocator_pages) continue;
+        if (desc->num_pages < *total_pages) continue;
 
-            allocator_phys_addr = desc->physical_start;
+        *phys_addr = desc->physical_start;
 
-            desc->num_pages -= allocator_pages;
-            desc->physical_start += allocator_pages * PAGE_SIZE;
-            found = true;
-            break;
-        }
-
-        KERNEL_ASSERT(found, "Not enough memory for frame allocator")
+        desc->num_pages -= *total_pages;
+        desc->physical_start += *total_pages * PAGE_SIZE;
+        KERNEL_ASSERT(phys_addr != 0, "Not enough memory for frame allocator")
+        return;
     }
+}
+
+void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
+                                void* uefi_memory_map, uint64_t entry_pool_pages) {
+    _Static_assert(sizeof(ListEntry) == 16, "Size of ListEntry is not 16 bytes");
+    _Static_assert(sizeof(PageFrameAllocation) == 16,
+                   "Size of PageFrameAllocation is not 16 bytes");
 
     // Zero out memory used for allocator
-    memset((void*)allocator_phys_addr, 0, allocator_pages * PAGE_SIZE);
+    memset((void*)virt_addr, 0, total_pages * PAGE_SIZE);
 
     // Populate entry pool and buddy maps
     {
-        PhysicalAddress curr_addr = allocator_phys_addr;
-        fill_memory_entry_pool(curr_addr, entry_pool_block_size / PAGE_SIZE);
-        curr_addr += entry_pool_block_size;
+        fill_memory_entry_pool(virt_addr, entry_pool_pages);
+        virt_addr += entry_pool_pages * PAGE_SIZE;
 
         // Populate buddy maps
         for (uint64_t i = 0; i < (ORDERS - 1); ++i) {
-            g_free_lists[i].buddy_map = (uint64_t*)curr_addr;
-            curr_addr += bitmap_sizes[i];
+            g_free_lists[i].buddy_map = (uint64_t*)virt_addr;
+            virt_addr += get_memory_size() / g_block_sizes[i];
         }
     }
 
@@ -450,6 +448,7 @@ void initialize_frame_allocator(void* uefi_memory_map) {
 
     // Remove all unusable frames from allocator
     {
+        const UEFIMemoryMap* memory_map = (UEFIMemoryMap*)uefi_memory_map;
         const UEFIMemoryDescriptor* last = 0;
         for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {
             const UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];

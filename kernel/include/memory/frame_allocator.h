@@ -11,7 +11,14 @@ typedef struct {
     } __attribute__((packed));
 } PageFrameAllocation;
 
-void initialize_frame_allocator(void* uefi_memory_map);
+void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_addr,
+                                  uint64_t* total_pages, uint64_t* entry_pool_pages);
+
+void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
+                                void* uefi_memory_map, uint64_t entry_pool_pages);
+
+// Get the size of blocks of specified order
+uint64_t get_order_block_size(uint8_t order);
 
 // Allocate page frames (allocation may consist of several non-contiguos blocks)
 // Underlying memory for PageFrameAllocation structs is owned by the allocator

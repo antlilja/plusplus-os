@@ -1,22 +1,36 @@
 #include "memory.h"
 
+#include "kassert.h"
 #include "uefi.h"
+#include "memory/paging.h"
 #include "memory/frame_allocator.h"
 
 uint64_t g_memory_size = 0;
 
-void initialize_memory(void* uefi_memory_map) {
-    // Calculate memory size
+uint64_t get_memory_size() { return g_memory_size; }
+
+void initialize_memory(void* uefi_memory_map, PhysicalAddress* kernel_phys_addr,
+                       VirtualAddress* kernel_virt_addr) {
+    // Calculate memory size, get kernel address and kernel size
+    uint64_t kernel_size = 0;
     {
         const UEFIMemoryMap* memory_map = (UEFIMemoryMap*)uefi_memory_map;
         for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {
             const UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];
             PhysicalAddress high_addr = desc->physical_start + desc->num_pages * PAGE_SIZE;
             if (high_addr > g_memory_size) g_memory_size = high_addr;
+
+            if (desc->type == EfiLoaderCode) {
+                *kernel_phys_addr = desc->physical_start;
+                kernel_size = desc->num_pages * PAGE_SIZE;
+            }
         }
     }
+    KERNEL_ASSERT(kernel_size != 0, "Could not find kernel address")
 
-    initialize_frame_allocator(uefi_memory_map);
+    // This call does a lot of things:
+    // * Creates new page table and maps kernel into it.
+    // * Initializes the paging system
+    // * Initializes the frame allocator
+    *kernel_virt_addr = initialize_paging(uefi_memory_map, *kernel_phys_addr, kernel_size);
 }
-
-uint64_t get_memory_size() { return g_memory_size; }

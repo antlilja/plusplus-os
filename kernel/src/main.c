@@ -18,8 +18,10 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     put_string("  |_|               Week-1 ", 10, 8);
 
     // Initalize memory systems
-    initialize_memory(mm);
-    put_string("Memory initalized", 10, 9);
+    PhysicalAddress kernel_phys_addr;
+    PhysicalAddress kernel_virt_addr;
+    initialize_memory(mm, &kernel_phys_addr, &kernel_virt_addr);
+    put_string("Memory initialized", 10, 9);
 
     // This disables interrupts
     setup_gdt_and_tss();

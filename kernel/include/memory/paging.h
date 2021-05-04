@@ -1,0 +1,15 @@
+#pragma once
+#include "memory.h"
+#include "memory/frame_allocator.h"
+
+// Maps discrete allocations into contiguos virtual address space
+VirtualAddress map_allocation(PageFrameAllocation* allocation);
+
+// Maps the physical address range to available virtual address space
+VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages);
+
+// Unmaps virtual address space
+void unmap(VirtualAddress virt_addr, uint64_t pages);
+
+VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_phys_addr,
+                                 uint64_t kernel_size);

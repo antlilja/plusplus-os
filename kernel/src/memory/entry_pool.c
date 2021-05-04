@@ -1,5 +1,6 @@
 #include "memory/entry_pool.h"
 
+#include "memory/paging.h"
 #include "memory/frame_allocator.h"
 #include "kassert.h"
 
@@ -25,23 +26,23 @@ void fill_memory_entry_pool(VirtualAddress addr, uint64_t pages) {
 
 MemoryEntry* get_memory_entry() {
     if (g_memory_entry_pool.count < ENTRY_THRESHOLD) {
-        g_memory_entry_pool.count += 20;
+        g_memory_entry_pool.count += ENTRY_THRESHOLD;
 
-        PhysicalAddress addr;
-        bool success = alloc_frames_contiguos(0, &addr);
+        PageFrameAllocation* allocation = alloc_frames(0);
+        KERNEL_ASSERT(allocation != 0, "Out of memory")
 
-        // TODO(Anton Lilja, 01/05/2021):
-        // This is temporary and only required because we're using physical addressing,
-        // The next member in MemoryEntry has to be able to be 0 to indicate end of list.
-        if (success && addr == 0) {
-            success = alloc_frames_contiguos(0, &addr);
-            free_frames_contiguos(0, 0);
+        const VirtualAddress virt_addr = map_allocation(allocation);
+
+        g_memory_entry_pool.count -= ENTRY_THRESHOLD;
+
+        fill_memory_entry_pool(virt_addr, 1);
+
+        while (allocation != 0) {
+            MemoryEntry* entry = (MemoryEntry*)allocation;
+            allocation = allocation->next;
+
+            free_memory_entry(entry);
         }
-
-        g_memory_entry_pool.count -= 20;
-
-        KERNEL_ASSERT(success, "Out of memory")
-        fill_memory_entry_pool(addr, 1);
     }
 
     MemoryEntry* entry = g_memory_entry_pool.head;
