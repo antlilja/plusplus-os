@@ -1,9 +1,22 @@
 #include "rendering.h"
 #include "font.h"
 
+#include "util.h"
+#include "memory/paging.h"
+
 Framebuffer g_frame_buffer;
 uint32_t g_bg_color = 0x00000000;
 uint32_t g_fg_color = 0xffee2a7a;
+
+void remap_framebuffer() {
+    const uint64_t framebuffer_size = round_up_to_multiple(
+        g_frame_buffer.width * g_frame_buffer.height * sizeof(uint32_t), PAGE_SIZE);
+
+    const uint64_t framebuffer_pages = framebuffer_size / PAGE_SIZE;
+
+    g_frame_buffer.address =
+        (void*)map_range((PhysicalAddress)g_frame_buffer.address, framebuffer_pages);
+}
 
 void put_pixel(uint64_t x, uint64_t y, uint32_t color) {
     // write to frame buffer, assumes 4 byte color.

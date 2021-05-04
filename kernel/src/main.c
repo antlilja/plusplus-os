@@ -55,6 +55,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     jump_to_kernel_virtual(kernel_phys_addr, kernel_virt_addr);
     put_string("Kernel now running in virtual address space", 10, 10);
 
+    remap_framebuffer();
+    put_string("Framebuffer remapped to virtual address space", 10, 11);
+
     // This disables interrupts
     setup_gdt_and_tss();
     put_string("Global descriptor table initalized", 10, 12);
