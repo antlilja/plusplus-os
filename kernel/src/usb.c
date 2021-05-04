@@ -118,8 +118,7 @@ typedef struct UhciController {
     UhciQH* qh_pool;
     UhciTD* td_pool;
     UhciQH* asyncQH;
-
-} UhciController;
+} UhciController; // __attribute__((aligned(0x1000)))
 
 // ---------------------------------------------------------------------------------------
 void print_io_reg(uint16_t io_address) {
@@ -140,60 +139,76 @@ void print_io_reg(uint16_t io_address) {
     put_hex_32(port_in_u16(io_address + REG_PORTSC1), 30, 22);
     put_hex_32(port_in_u16(io_address + REG_PORTSC2), 30, 23);
 }
+
+static uintptr_t alloc_pos = 0x00200000;
+
+void* Alloc(uint32_t size) { return AllocAlign(size, (uint32_t)4096); }
+
+void* AllocAlign(uint32_t size, uint32_t align) {
+    uintptr_t offset = alloc_pos & (align - 1);
+    if (offset) alloc_pos += align - offset;
+    void* res = (void*)alloc_pos;
+    alloc_pos += size;
+    return res;
+}
+
 void UhciInit() {
     uint32_t device_address =
         pci_find_next_device(UHCI_CONTROLLER_ADDRESS, UHCI_CONTROLLER_MASK, 0);
     uint16_t io_address =
         pci_read_config_u32(device_address, BAR4_OFFSET) & ~0x3; // Add better function in pci
-    // // Controller initialization
-    // UhciController *hc = VMAlloc(sizeof(UhciController));
-    // hc->io_address = io_address;
-    // hc->frame_list = VMAlloc(1024 * sizeof(uint32_t));
-    // hc->qh_pool = (UhciQH *)VMAlloc(sizeof(UhciQH) * MAX_QH);
-    // hc->td_pool = (UhciTD *)VMAlloc(sizeof(UhciTD) * MAX_TD);
 
-    // memset(hc->qh_pool, 0, sizeof(UhciQH) * MAX_QH);
-    // memset(hc->td_pool, 0, sizeof(UhciTD) * MAX_TD);
+    // char data[2 << 15];
 
-    // // Frame list setup
-    // UhciQH *qh = UhciAllocQH(hc);
-    // qh->head = TD_PTR_TERMINATE;
-    // qh->element = TD_PTR_TERMINATE;
-    // // qh->transfer = 0;
-    // // qh->qhLink.prev = &qh->qhLink;
-    // // qh->qhLink.next = &qh->qhLink;
+    // Controller initialization
+    UhciController* hc = Alloc(sizeof(UhciController));
+    hc->io_address = io_address;
+    hc->frame_list = Alloc(1024 * sizeof(uint32_t));
+    hc->qh_pool = (UhciQH*)Alloc(sizeof(UhciQH) * MAX_QH);
+    hc->td_pool = (UhciTD*)Alloc(sizeof(UhciTD) * MAX_TD);
 
-    // hc->asyncQH = qh;
-    // for (uint32_t i = 0; i < 1024; ++i)
-    // {
-    //     hc->frame_list[i] = TD_PTR_QH | (uint32_t)(uintptr_t)qh;
-    // }
+    memset(hc->qh_pool, 0, sizeof(UhciQH) * MAX_QH);
+    memset(hc->td_pool, 0, sizeof(UhciTD) * MAX_TD);
+
+    // Frame list setup
+    UhciQH* qh = (UhciTD*)Alloc(hc);
+    qh->head = TD_PTR_TERMINATE;
+    qh->element = TD_PTR_TERMINATE;
+    // qh->transfer = 0;
+    // qh->qhLink.prev = &qh->qhLink;
+    // qh->qhLink.next = &qh->qhLink;
+
+    hc->asyncQH = qh;
+    for (uint32_t i = 0; i < 1024; ++i) {
+        hc->frame_list[i] = TD_PTR_QH | (uint32_t)(uintptr_t)qh;
+    }
 
     // Disable interrupts
     port_out_u16(io_address + REG_INTR, 0);
 
-    // // Assign frame list
-    // port_out_u16(hc->io_address + REG_FRNUM, 0);
-    // port_out_u32(hc->io_address + REG_FRBASEADD, (uint32_t)(uintptr_t)hc->frame_list);
-    // port_out_u16(hc->io_address + REG_SOFMOD, 0x40);
+    // Assign frame list
+    port_out_u16(hc->io_address + REG_FRNUM, 0);
+    port_out_u32(hc->io_address + REG_FRBASEADD, (uint32_t)(uintptr_t)hc->frame_list);
+    port_out_u16(hc->io_address + REG_SOFMOD, 0x40);
 
-    // // Clear status
-    // port_out_u16(hc->io_address + REG_STS, 0xffff);
+    // Clear status
+    port_out_u16(hc->io_address + REG_STS, 0xffff);
 
     // Start controller
     port_out_u16(io_address + REG_CMD, CMD_RUN);
 
-    // put_hex_32(hc->frame_list);
+    // // put_hex_32(hc->frame_list);
+    put_hex_32(hc->frame_list, 10, 14);
 
-    // uint32_t frame_list_base_address = port_in_u32(io_address+REG_FRBASEADD);
+    // uint32_t frame_list_base_address = port_in_u32(io_address + REG_FRBASEADD);
     // uint32_t frame_list_entry = port_in_u32(frame_list_base_address);
 
     // put_hex_64(frame_list_base_address, 10, 13);
-    // put_hex_64(io_address+REG_FRBASEADD, 10, 14);
+    // put_hex_64(io_address + REG_FRBASEADD, 10, 14);
 
-    while (1) {
-        print_io_reg(io_address);
-    }
+    // while (1) {
+    //     print_io_reg(io_address);
+    // }
 }
 
 /*
