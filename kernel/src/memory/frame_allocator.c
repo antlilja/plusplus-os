@@ -470,10 +470,7 @@ void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
             // Remove frames of specific memory types
             switch (desc->type) {
                 case EfiBootServicesCode:
-                case EfiBootServicesData:
                 case EfiRuntimeServicesCode:
-                case EfiRuntimeServicesData:
-                case EfiLoaderData:
                 case EfiConventionalMemory: break;
                 default: {
                     const bool success = remove_range(desc->physical_start, desc->num_pages);
