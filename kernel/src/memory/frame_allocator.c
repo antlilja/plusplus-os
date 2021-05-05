@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MIN_BLOCK_SIZE PAGE_SIZE
-#define ORDERS 8
+#define FRAME_ORDERS 8
 
 // Free list entry
 typedef struct {
@@ -21,18 +21,18 @@ typedef struct {
 struct {
     ListEntry* head;
     uint64_t* buddy_map;
-} g_free_lists[ORDERS] = {0};
+} g_free_lists[FRAME_ORDERS] = {0};
 
-uint64_t g_block_sizes[ORDERS];
+uint64_t g_block_sizes[FRAME_ORDERS];
 
 uint64_t get_order_block_size(uint8_t order) {
-    KERNEL_ASSERT(order < ORDERS, "Not an order")
+    KERNEL_ASSERT(order < FRAME_ORDERS, "Not an order")
     return g_block_sizes[order];
 }
 
 // Calculate array index and bit index for buddy corresponding to address and order
 void calc_buddy_index(uint64_t addr, uint8_t order, uint64_t* arr_index, uint8_t* bit_index) {
-    KERNEL_ASSERT(order < (ORDERS - 1), "Order does not have a buddy map")
+    KERNEL_ASSERT(order < (FRAME_ORDERS - 1), "Order does not have a buddy map")
     *arr_index = addr / g_block_sizes[order];
     *arr_index -= (*arr_index) % 2;
     *arr_index /= 2;
@@ -53,7 +53,7 @@ bool get_buddy_bit(uint64_t addr, uint8_t order) {
 
 void toggle_buddy_bit(uint64_t addr, uint8_t order) {
     // The last order does not have a buddy map
-    if (order == ORDERS - 1) return;
+    if (order == FRAME_ORDERS - 1) return;
 
     uint64_t arr_index;
     uint8_t bit_index;
@@ -87,7 +87,7 @@ PageFrameAllocation* alloc_frames(uint64_t pages) {
     while (size != 0) {
         // Get biggest order which fits into allocations size
         int8_t order_to_alloc = 0;
-        while (order_to_alloc < ORDERS) {
+        while (order_to_alloc < FRAME_ORDERS) {
             // Size big enough for order
             if (size < g_block_sizes[order_to_alloc]) break;
 
@@ -103,7 +103,7 @@ PageFrameAllocation* alloc_frames(uint64_t pages) {
                 if (g_free_lists[order].head == 0) {
                     ++order;
 
-                    if (order < ORDERS) continue;
+                    if (order < FRAME_ORDERS) continue;
 
                     // Allocate from smaller blocks because no bigger are available
                     --order_to_alloc;
@@ -184,7 +184,7 @@ void free_frames(PageFrameAllocation* allocation) {
         g_free_lists[order].head = entry;
 
         // Merge blocks as far up as possible
-        while (order < (ORDERS - 1) && !get_buddy_bit(entry->addr, order)) {
+        while (order < (FRAME_ORDERS - 1) && !get_buddy_bit(entry->addr, order)) {
             // Remove entry from free list
             g_free_lists[order].head = entry->next;
 
@@ -236,7 +236,7 @@ void free_frames(PageFrameAllocation* allocation) {
 }
 
 bool alloc_frames_contiguos(uint8_t order_to_alloc, PhysicalAddress* out_addr) {
-    KERNEL_ASSERT(order_to_alloc < ORDERS, "Not an order")
+    KERNEL_ASSERT(order_to_alloc < FRAME_ORDERS, "Not an order")
 
     // Split bigger blocks if none of the correct size are available
     {
@@ -244,7 +244,7 @@ bool alloc_frames_contiguos(uint8_t order_to_alloc, PhysicalAddress* out_addr) {
         while (g_free_lists[order_to_alloc].head == 0) {
             if (g_free_lists[order].head == 0) {
                 // Out of memory
-                if (++order >= ORDERS) return false;
+                if (++order >= FRAME_ORDERS) return false;
             }
 
             // Remove entyr from free list
@@ -285,7 +285,7 @@ bool remove_range(PhysicalAddress addr, uint64_t pages) {
     while (size != 0) {
         // Find largest order size which range fits into
         int32_t order_to_alloc = 1;
-        while (order_to_alloc < ORDERS) {
+        while (order_to_alloc < FRAME_ORDERS) {
             // Address aligns with block size of order
             const bool addr_align = (addr % g_block_sizes[order_to_alloc]) == 0;
 
@@ -298,7 +298,7 @@ bool remove_range(PhysicalAddress addr, uint64_t pages) {
         }
         --order_to_alloc;
 
-        for (int32_t order = ORDERS - 1; order >= 0; --order) {
+        for (int32_t order = FRAME_ORDERS - 1; order >= 0; --order) {
             // Look for entry which contains addr in its range
             ListEntry* curr_entry = g_free_lists[order].head;
             ListEntry* last_entry = 0;
@@ -350,7 +350,7 @@ void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_a
                                   uint64_t* total_pages, uint64_t* entry_pool_pages) {
     // Calculate block sizes
     g_block_sizes[0] = MIN_BLOCK_SIZE;
-    for (uint64_t i = 1; i < ORDERS; ++i) {
+    for (uint64_t i = 1; i < FRAME_ORDERS; ++i) {
         g_block_sizes[i] = g_block_sizes[i - 1] * 2;
     }
 
@@ -359,13 +359,14 @@ void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_a
     {
         // List entries required at start by all max order blocks
         // We double the amount of free list entries required at the start
-        const uint64_t free_list_entries = (get_memory_size() / g_block_sizes[ORDERS - 1]) * 2;
+        const uint64_t free_list_entries =
+            (get_memory_size() / g_block_sizes[FRAME_ORDERS - 1]) * 2;
 
         *entry_pool_pages =
             round_up_to_multiple(free_list_entries * sizeof(ListEntry), PAGE_SIZE) / PAGE_SIZE;
 
         // Calculate memory required by bitmaps
-        for (int i = 0; i < (ORDERS - 1); ++i) {
+        for (int i = 0; i < (FRAME_ORDERS - 1); ++i) {
             total_bitmaps_size += get_memory_size() / g_block_sizes[i];
         }
 
@@ -417,7 +418,7 @@ void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
         virt_addr += entry_pool_pages * PAGE_SIZE;
 
         // Populate buddy maps
-        for (uint64_t i = 0; i < (ORDERS - 1); ++i) {
+        for (uint64_t i = 0; i < (FRAME_ORDERS - 1); ++i) {
             g_free_lists[i].buddy_map = (uint64_t*)virt_addr;
             virt_addr += get_memory_size() / g_block_sizes[i];
         }
@@ -430,16 +431,16 @@ void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
         // Add first entry to free list
         ListEntry* curr_entry = (ListEntry*)get_memory_entry();
         curr_entry->addr = curr_addr;
-        curr_addr += g_block_sizes[ORDERS - 1];
-        g_free_lists[ORDERS - 1].head = curr_entry;
+        curr_addr += g_block_sizes[FRAME_ORDERS - 1];
+        g_free_lists[FRAME_ORDERS - 1].head = curr_entry;
 
-        const uint64_t block_count = get_memory_size() / g_block_sizes[ORDERS - 1];
+        const uint64_t block_count = get_memory_size() / g_block_sizes[FRAME_ORDERS - 1];
         for (uint64_t i = 1; i < block_count; ++i) {
             if (curr_addr >= get_memory_size()) break;
 
             ListEntry* next_entry = (ListEntry*)get_memory_entry();
             next_entry->addr = curr_addr;
-            curr_addr += g_block_sizes[ORDERS - 1];
+            curr_addr += g_block_sizes[FRAME_ORDERS - 1];
 
             curr_entry->next = next_entry;
             curr_entry = next_entry;
