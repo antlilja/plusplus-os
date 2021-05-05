@@ -47,6 +47,7 @@ MemoryEntry* get_memory_entry() {
 
     MemoryEntry* entry = g_memory_entry_pool.head;
     g_memory_entry_pool.head = entry->next;
+    entry->next = 0;
     --g_memory_entry_pool.count;
     return entry;
 }
