@@ -457,8 +457,7 @@ void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
             {
                 const PhysicalAddress addr = last->physical_start + last->num_pages * PAGE_SIZE;
                 if (addr != desc->physical_start && last != 0) {
-                    const uint64_t size = desc->physical_start -
-                                          (last->physical_start + (last->num_pages * PAGE_SIZE));
+                    const uint64_t size = desc->physical_start - addr;
 
                     KERNEL_ASSERT((addr % PAGE_SIZE) == 0, "Address not page aligned")
                     KERNEL_ASSERT((size % PAGE_SIZE) == 0, "Size not page aligned")
