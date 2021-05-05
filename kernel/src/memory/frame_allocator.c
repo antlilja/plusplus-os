@@ -9,7 +9,6 @@
 #include <string.h>
 
 #define MIN_BLOCK_SIZE PAGE_SIZE
-#define FRAME_ORDERS 8
 
 // Free list entry
 typedef struct {
