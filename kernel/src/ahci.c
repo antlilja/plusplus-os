@@ -4,7 +4,6 @@
 #include "ahci/fis.h"
 #include "ahci/hba.h"
 #include "pci.h"
-#include "frame_allocator.h"
 #include "memory.h"
 #include "kassert.h"
 
