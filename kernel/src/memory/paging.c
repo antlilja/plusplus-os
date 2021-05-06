@@ -110,7 +110,7 @@ PageEntry* get_page_entries(PageEntry* entry) {
             PageFrameAllocation* allocation = alloc_frames(PAGE_POOL_THRESHOLD);
             KERNEL_ASSERT(allocation != 0, "Out of memory")
 
-            VirtualAddress virt_addr = map_allocation(allocation);
+            VirtualAddress virt_addr = map_allocation(allocation, PAGING_WRITABLE);
 
             // Populate pool with allocated pages
             for (uint64_t i = 0; i < PAGE_POOL_THRESHOLD; ++i) {
@@ -224,7 +224,7 @@ void page_table_traversal_helper(VirtualAddress virt_addr, uint16_t* pd_index, P
 }
 
 void map_range_helper(VirtualAddress virt_addr, PhysicalAddress phys_addr, uint64_t pages,
-                      uint16_t* pd_index, PageEntry** pd_ptr, uint16_t* pt_index,
+                      PagingFlags flags, uint16_t* pd_index, PageEntry** pd_ptr, uint16_t* pt_index,
                       PageEntry** pt_ptr) {
     for (uint64_t i = 0; i < pages; ++i) {
         PageEntry* pt = *pt_ptr;
@@ -232,7 +232,11 @@ void map_range_helper(VirtualAddress virt_addr, PhysicalAddress phys_addr, uint6
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         pt[index].phys_addr = phys_addr >> 12;
         pt[index].present = true;
-        pt[index].write = true;
+        pt[index].write = (flags & PAGING_WRITABLE) != 0;
+        pt[index].cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
+        pt[index].write_through = (flags & PAGING_WRITE_THROUGH) != 0;
+        // TODO (Anton Lilja, 05-05-21):
+        // Disable execute privileges if functionality is available
 
         // Invalidate TLB entry for page belonging to virtual address
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
@@ -243,7 +247,7 @@ void map_range_helper(VirtualAddress virt_addr, PhysicalAddress phys_addr, uint6
     }
 }
 
-VirtualAddress map_allocation(PageFrameAllocation* allocation) {
+VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags) {
     // Calculate total size of mapping
     uint64_t size = 0;
     {
@@ -266,7 +270,8 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation) {
     while (allocation != 0) {
         uint64_t allocation_size = get_order_block_size(allocation->order);
         uint64_t pages = allocation_size / PAGE_SIZE;
-        map_range_helper(curr_virt_addr, allocation->addr, pages, &pd_index, &pd, &pt_index, &pt);
+        map_range_helper(
+            curr_virt_addr, allocation->addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
         allocation = allocation->next;
         curr_virt_addr += allocation_size;
     }
@@ -274,7 +279,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation) {
     return virt_addr;
 }
 
-VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages) {
+VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags flags) {
     const VirtualAddress virt_addr = alloc_addr_space(pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
@@ -283,7 +288,7 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages) {
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
     PageEntry* pt = get_page_entries(&pd[pt_index]);
 
-    map_range_helper(virt_addr, phys_addr, pages, &pd_index, &pd, &pt_index, &pt);
+    map_range_helper(virt_addr, phys_addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
     return virt_addr;
 }
 

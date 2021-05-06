@@ -31,7 +31,7 @@ MemoryEntry* get_memory_entry() {
         PageFrameAllocation* allocation = alloc_frames(0);
         KERNEL_ASSERT(allocation != 0, "Out of memory")
 
-        const VirtualAddress virt_addr = map_allocation(allocation);
+        const VirtualAddress virt_addr = map_allocation(allocation, PAGING_WRITABLE);
 
         g_memory_entry_pool.count -= ENTRY_THRESHOLD;
 
