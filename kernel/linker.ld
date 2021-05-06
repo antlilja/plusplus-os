@@ -1,19 +1,31 @@
 ENTRY (stage1_kernel_entry)
 
+PDP_MEM_RANGE = 0x8000000000;
+
+KERNEL_PML4_INDEX = 480;
+KERNEL_VIRTUAL_START = KERNEL_PML4_INDEX * PDP_MEM_RANGE;
+
+STACK_SIZE = 0x4000;
+
 SECTIONS
 {
-	. = 1M;
+	. = KERNEL_VIRTUAL_START;
 
+	s_kernel_code_start = .;
 	.text : ALIGN (4K)
 	{
 		*(.text*)
 	}
+	s_kernel_code_end = .;
 
+	s_kernel_rodata_start = .;
 	.rodata : ALIGN (4K)
 	{
 		*(.rodata*)
 	}
+	s_kernel_rodata_end = .;
 
+	s_kernel_data_start = .;
 	.data : ALIGN (4K)
 	{
 		*(.data*)
@@ -25,10 +37,13 @@ SECTIONS
 		*(.bss*)
 
 		. = ALIGN (16);
-    		__stack_bottom__ = .;
-    		. += 0x4000;
-    		__stack_top__ = .;
+    		s_stack_bottom = .;
+    		. += STACK_SIZE;
+    		s_stack_top = .;
 	}	
+
+	. = ALIGN(4K);
+	s_kernel_data_end = .;
 
 	/DISCARD/ :
 	{
