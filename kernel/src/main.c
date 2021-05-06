@@ -1,3 +1,4 @@
+#include "memory/paging.h"
 #include "rendering.h"
 #include "memory.h"
 #include "gdt.h"
@@ -5,6 +6,35 @@
 
 #include <stdint.h>
 #include <string.h>
+
+__attribute__((naked)) void jump_to_kernel_virtual(PhysicalAddress __attribute__((unused))
+                                                   kernel_phys_addr,
+                                                   VirtualAddress __attribute__((unused))
+                                                   kernel_virt_addr) {
+    asm(
+        // Calculate virtual address for base pointer
+        "sub %rdi, %rbp\n"
+        "add %rsi, %rbp\n"
+
+        // Calculate virtual address for stack pointer
+        "sub %rdi, %rsp\n"
+        "add %rsi, %rsp\n"
+
+        // Pop return address
+        "pop %rdx\n"
+
+        // Push cs offset onto stack
+        "mov %cs, %ax\n"
+        "push %rax\n"
+
+        // Calculate virtual return address and push it onto stack
+        "sub %rdi, %rdx\n"
+        "add %rsi, %rdx\n"
+        "push %rdx\n"
+
+        // Do long return
+        "lretq\n");
+}
 
 _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     // Set frame buffer
@@ -23,14 +53,25 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     initialize_memory(mm, &kernel_phys_addr, &kernel_virt_addr);
     put_string("Memory initialized", 10, 9);
 
+    jump_to_kernel_virtual(kernel_phys_addr, kernel_virt_addr);
+    put_string("Kernel now running in virtual address space", 10, 10);
+
+    remap_framebuffer();
+    put_string("Framebuffer remapped to virtual address space", 10, 11);
+
     // This disables interrupts
     setup_gdt_and_tss();
-    put_string("Global descriptor table initalized", 10, 10);
+    put_string("Global descriptor table initalized", 10, 12);
 
     // Interrupts are enabled here.
     // They can be registered using the register_interrupt(...) function
     setup_idt();
-    put_string("Interrupt descriptor table initalized", 10, 11);
+    put_string("Interrupt descriptor table initalized", 10, 13);
+
+    // After this point all physical addresses have to be mapped to virtual memory
+    // NOTE: The memory pointed at by mm and fb should NOT be used after this point
+    free_uefi_memory_and_remove_identity_mapping(mm);
+    put_string("UEFI data deallocated and identity mapping removed", 10, 14);
 
     // This function can't return
     while (1)

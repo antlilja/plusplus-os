@@ -317,6 +317,49 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
     }
 }
 
+void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map) {
+    // Free UEFI memory
+    {
+        const UEFIMemoryMap* memory_map = (const UEFIMemoryMap*)uefi_memory_map;
+        for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {
+            const UEFIMemoryDescriptor* desc = (const UEFIMemoryDescriptor*)&memory_map->buffer[i];
+            switch (desc->type) {
+                case EfiBootServicesData:
+                case EfiRuntimeServicesData:
+                case EfiLoaderData: {
+                    PhysicalAddress phys_addr = desc->physical_start;
+                    uint64_t size = desc->num_pages * PAGE_SIZE;
+                    while (size != 0) {
+                        uint8_t order = 0;
+                        for (; order < FRAME_ORDERS; ++order) {
+                            if (get_order_block_size(order) > size ||
+                                phys_addr % get_order_block_size(order) != 0)
+                                break;
+                        }
+                        --order;
+
+                        free_frames_contiguos(phys_addr, order);
+                        size -= get_order_block_size(order);
+                        phys_addr += get_order_block_size(order);
+                    }
+                    break;
+                }
+                default: break;
+            }
+        }
+    }
+
+    // Clear idenity mapping
+    for (uint64_t i = 0; i < KERNEL_PML4_OFFSET; ++i) g_pml4[i].value = 0;
+
+    // Refresh TLB
+    asm volatile("mov %%cr3, %%rax\n"
+                 "mov %%rax, %%cr3\n"
+                 :
+                 :
+                 : "rax", "cr3", "memory");
+}
+
 VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_phys_addr,
                                  uint64_t kernel_size) {
     _Static_assert(KERNEL_PML4_OFFSET < PAGE_ENTRY_COUNT, "Kernel PML4 offset is out of bounds");

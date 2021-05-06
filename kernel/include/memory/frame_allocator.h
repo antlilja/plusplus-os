@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#define FRAME_ORDERS 8
+
 typedef struct {
     void* next;
     struct {
