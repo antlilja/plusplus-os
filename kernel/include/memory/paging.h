@@ -2,6 +2,8 @@
 #include "memory.h"
 #include "memory/frame_allocator.h"
 
+#define SIGN_EXT_ADDR(addr) ((addr) | (((((addr) >> 47) & 1) * 0xffffULL) << 48))
+
 // Maps discrete allocations into contiguos virtual address space
 VirtualAddress map_allocation(PageFrameAllocation* allocation);
 

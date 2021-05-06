@@ -30,8 +30,6 @@
 #define GET_LEVEL_INDEX(addr, level) \
     (((addr) & (OFFSET_INDEX_MASK << (12 + 9 * (level)))) >> (12 + 9 * (level)))
 
-#define SIGN_EXT_ADDR(addr) ((addr) | (((((addr) >> 47) & 1) * 0xffffULL) << 48))
-
 typedef union {
     struct {
         bool present : 1;
