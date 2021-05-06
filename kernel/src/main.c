@@ -4,6 +4,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include "acpi.h"
+#include "pci.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -71,6 +72,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
 
     initialize_acpi(rsdp);
     put_string("ACPI initialized", 10, 14);
+
+    enumerate_pci_devices();
+    put_string("PCI devices enumerated", 10, 15);
 
     // After this point all physical addresses have to be mapped to virtual memory
     // NOTE: The memory pointed at by mm and fb should NOT be used after this point
