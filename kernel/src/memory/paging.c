@@ -324,6 +324,22 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
     }
 }
 
+bool get_physical_address(VirtualAddress virt_addr, PhysicalAddress* phys_addr) {
+    const uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
+    const PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+    if (pd == 0) return false;
+
+    const uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
+    const PageEntry* pt = get_page_entries(&pd[pt_index]);
+    if (pt == 0) return false;
+
+    const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
+    if (pt[index].present == false) return false;
+
+    *phys_addr = (pt[index].phys_addr << 12) | (virt_addr & OFFSET_INDEX_MASK);
+    return true;
+}
+
 void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map) {
     // Free UEFI memory
     {

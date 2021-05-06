@@ -20,6 +20,10 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags 
 // Unmaps virtual address space
 void unmap(VirtualAddress virt_addr, uint64_t pages);
 
+// Translates a virtual address into the corresponding physical address
+// Returns false if the virtual address isn't mapped
+bool get_physical_address(VirtualAddress virt_addr, PhysicalAddress* phys_addr);
+
 void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map);
 
 VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_phys_addr,
