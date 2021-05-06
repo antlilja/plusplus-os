@@ -3,6 +3,7 @@
 #include "memory.h"
 #include "gdt.h"
 #include "idt.h"
+#include "acpi.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -68,10 +69,13 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     setup_idt();
     put_string("Interrupt descriptor table initalized", 10, 13);
 
+    initialize_acpi(rsdp);
+    put_string("ACPI initialized", 10, 14);
+
     // After this point all physical addresses have to be mapped to virtual memory
     // NOTE: The memory pointed at by mm and fb should NOT be used after this point
     free_uefi_memory_and_remove_identity_mapping(mm);
-    put_string("UEFI data deallocated and identity mapping removed", 10, 14);
+    put_string("UEFI data deallocated and identity mapping removed", 10, 16);
 
     // This function can't return
     while (1)
