@@ -43,6 +43,6 @@ typedef volatile struct {
     uint8_t max_grant;
 } __attribute__((packed)) PCIConfigSpace0;
 
-bool get_pci_device(PhysicalAddress* config_space_phys_addr, uint32_t type, uint32_t mask);
+PCIConfigSpace0* get_pci_device(uint32_t type, uint32_t mask);
 
 void enumerate_pci_devices();

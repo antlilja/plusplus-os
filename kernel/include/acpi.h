@@ -16,6 +16,8 @@ typedef struct {
 } __attribute__((packed)) ACPISDTHeader;
 
 bool sdt_is_valid(const ACPISDTHeader* sdt, char* signature);
+void* find_table(const char* signature);
+
 void prepare_acpi_memory(void* uefi_memory_map);
 void initialize_acpi(PhysicalAddress rsdp_ptr);
 

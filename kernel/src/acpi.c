@@ -37,7 +37,20 @@ bool sdt_is_valid(const ACPISDTHeader* sdt, char* signature) {
 
     return !sum;
 }
+
+void* find_table(const char* signature) {
+    const uint64_t* xsdt_arr = (const uint64_t*)((VirtualAddress)g_xsdt + sizeof(XSDT));
+
+    const uint64_t entries = (g_xsdt->length - sizeof(XSDT)) / sizeof(uint64_t);
     for (uint64_t i = 0; i < entries; ++i) {
+        const ACPISDTHeader* header = (ACPISDTHeader*)get_virtual_acpi_address(xsdt_arr[i]);
+
+        if (memcmp(header->signature, signature, 4) == 0) return (void*)header;
+    }
+
+    return 0;
+}
+
 typedef struct {
     PhysicalAddress phys;
     VirtualAddress virt;
