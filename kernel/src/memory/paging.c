@@ -177,7 +177,7 @@ VirtualAddress alloc_addr_space(uint64_t pages) {
                 const VirtualAddress addr = entry->addr << 12;
                 entry->addr = (addr + pages * PAGE_SIZE) >> 12;
                 entry->pages += pages;
-                return addr;
+                return SIGN_EXT_ADDR(addr);
             }
             else if (entry->pages == pages) {
                 if (last == 0) {
@@ -189,7 +189,7 @@ VirtualAddress alloc_addr_space(uint64_t pages) {
 
                 const VirtualAddress addr = entry->addr << 12;
                 free_memory_entry((MemoryEntry*)entry);
-                return addr;
+                return SIGN_EXT_ADDR(addr);
             }
 
             last = entry;
