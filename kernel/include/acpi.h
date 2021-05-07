@@ -1,19 +1,24 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "memory.h"
 
 typedef struct {
     char signature[4];
-    uint32_t len;
+    uint32_t length;
     uint8_t revision;
     uint8_t checksum;
-    char OEM_ID[6];
-    char OEM_table_ID[8];
-    uint32_t OEM_revision;
-    uint32_t creator_ID;
+    char oem_id[6];
+    char oem_table_id[8];
+    uint32_t oem_revision;
+    uint32_t creator_id;
     uint32_t creator_revision;
 } __attribute__((packed)) ACPISDTHeader;
 
-bool find_table(const char* signature, void** table_ptr);
+bool sdt_is_valid(const ACPISDTHeader* sdt, char* signature);
+void* find_table(const char* signature);
 
-void initialize_acpi(void* rsdp);
+void prepare_acpi_memory(void* uefi_memory_map);
+void initialize_acpi(PhysicalAddress rsdp_ptr);
+
+VirtualAddress get_virtual_acpi_address(PhysicalAddress physical);

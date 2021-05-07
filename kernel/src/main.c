@@ -38,7 +38,7 @@ __attribute__((naked)) void jump_to_kernel_virtual(PhysicalAddress __attribute__
         "lretq\n");
 }
 
-_Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
+_Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     // Set frame buffer
     memcpy((void*)&g_frame_buffer, (void*)fb, sizeof(g_frame_buffer));
     clear_screen(g_bg_color);
@@ -61,25 +61,28 @@ _Noreturn void kernel_entry(void* mm, void* fb, void* rsdp) {
     remap_framebuffer();
     put_string("Framebuffer remapped to virtual address space", 10, 11);
 
+    prepare_acpi_memory(mm);
+    put_string("Prepared ACPI memory", 10, 12);
+
     // This disables interrupts
     setup_gdt_and_tss();
-    put_string("Global descriptor table initalized", 10, 12);
+    put_string("Global descriptor table initalized", 10, 13);
 
     // Interrupts are enabled here.
     // They can be registered using the register_interrupt(...) function
     setup_idt();
-    put_string("Interrupt descriptor table initalized", 10, 13);
-
-    initialize_acpi(rsdp);
-    put_string("ACPI initialized", 10, 14);
-
-    enumerate_pci_devices();
-    put_string("PCI devices enumerated", 10, 15);
+    put_string("Interrupt descriptor table initalized", 10, 14);
 
     // After this point all physical addresses have to be mapped to virtual memory
     // NOTE: The memory pointed at by mm and fb should NOT be used after this point
     free_uefi_memory_and_remove_identity_mapping(mm);
-    put_string("UEFI data deallocated and identity mapping removed", 10, 16);
+    put_string("UEFI data deallocated and identity mapping removed", 10, 15);
+
+    initialize_acpi(rsdp);
+    put_string("ACPI Initialized", 10, 16);
+
+    enumerate_pci_devices();
+    put_string("PCI devices enumerated", 10, 17);
 
     // This function can't return
     while (1)
