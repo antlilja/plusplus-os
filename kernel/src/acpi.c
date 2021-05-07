@@ -7,10 +7,10 @@
 typedef struct {
     char signature[8];
     uint8_t checksum;
-    char OEM_ID[6];
+    char oem_id[6];
     uint8_t revision;
     uint32_t rsdt_phys_addr;
-    uint32_t len;
+    uint32_t length;
     PhysicalAddress xsdt_phys_addr;
     uint8_t ext_checksum;
     uint8_t reserved[3];
@@ -23,7 +23,7 @@ const XSDT* g_xsdt;
 bool find_table(const char* signature, void** table_ptr) {
     const PhysicalAddress* xsdt_arr =
         (const PhysicalAddress*)((PhysicalAddress)g_xsdt + sizeof(XSDT));
-    const uint64_t entries = (g_xsdt->len - sizeof(XSDT)) / sizeof(PhysicalAddress);
+    const uint64_t entries = (g_xsdt->length - sizeof(XSDT)) / sizeof(PhysicalAddress);
     for (uint64_t i = 0; i < entries; ++i) {
         const ACPISDTHeader* header = (const ACPISDTHeader*)xsdt_arr[i];
         if (memcmp(header->signature, signature, 4) == 0) {

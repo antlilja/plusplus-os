@@ -62,7 +62,7 @@ void enumerate_pci_devices() {
 
     const PhysicalAddress mcfg_addr = (PhysicalAddress)mcfg;
     const MCFGEntry* mcfg_arr = (MCFGEntry*)(mcfg_addr + sizeof(MCFG));
-    const uint64_t entries = (mcfg->header.len - sizeof(MCFG)) / sizeof(MCFGEntry);
+    const uint64_t entries = (mcfg->header.length - sizeof(MCFG)) / sizeof(MCFGEntry);
 
     for (uint64_t i = 0; i < entries; ++i) {
         const PhysicalAddress base_phys_addr = mcfg_arr[i].base_address;
