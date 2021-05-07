@@ -111,10 +111,10 @@ VirtualAddress get_virtual_acpi_address(PhysicalAddress physical) {
         // Find address in range
         if (entry->phys < physical && entry->phys + entry->size > physical)
             return (entry->virt - entry->phys + physical);
-        }
+    }
 
     return 0;
-    }
+}
 
 void initialize_acpi(PhysicalAddress rsdp_ptr) {
     RSDP* rsdp = (RSDP*)get_virtual_acpi_address(rsdp_ptr);
@@ -134,7 +134,7 @@ void initialize_acpi(PhysicalAddress rsdp_ptr) {
         // sum = 0 by condition
         for (int i = 20; i < 36; i++) sum += ((uint8_t*)rsdp)[i];
         KERNEL_ASSERT(!sum, "INVALID RSDP");
-}
+    }
 
     g_xsdt = (const XSDT*)get_virtual_acpi_address(rsdp->xsdt_phys_addr);
     KERNEL_ASSERT(g_xsdt, "XSDT VIRTUAL ADDRESS NOT FOUND");
