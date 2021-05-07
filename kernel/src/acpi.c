@@ -1,5 +1,6 @@
 #include "acpi.h"
 
+#include "kassert.h"
 #include "memory.h"
 #include "memory/paging.h"
 #include "memory/entry_pool.h"
@@ -23,10 +24,19 @@ typedef ACPISDTHeader XSDT;
 
 const XSDT* g_xsdt;
 
-bool find_table(const char* signature, void** table_ptr) {
-    const PhysicalAddress* xsdt_arr =
-        (const PhysicalAddress*)((PhysicalAddress)g_xsdt + sizeof(XSDT));
-    const uint64_t entries = (g_xsdt->length - sizeof(XSDT)) / sizeof(PhysicalAddress);
+bool sdt_is_valid(const ACPISDTHeader* sdt, char* signature) {
+    if (memcmp(sdt->signature, signature, 4)) return false;
+
+    uint8_t* table_bytes = (uint8_t*)sdt;
+
+    // All bytes of the table summed must be equal to 0 (mod 0x100)
+    uint8_t sum = 0;
+    for (uint32_t i = 0; i < sdt->length; i++) {
+        sum += table_bytes[i];
+    }
+
+    return !sum;
+}
     for (uint64_t i = 0; i < entries; ++i) {
 typedef struct {
     PhysicalAddress phys;
@@ -96,8 +106,26 @@ VirtualAddress get_virtual_acpi_address(PhysicalAddress physical) {
 void initialize_acpi(PhysicalAddress rsdp_ptr) {
     RSDP* rsdp = (RSDP*)get_virtual_acpi_address(rsdp_ptr);
     KERNEL_ASSERT(rsdp, "RSDP VIRTUAL ADDRESS NOT FOUND");
+
+    { // Validate rsdp, sum & 0xFF from bytes 0 - 20 AND 20 - 36 must be zero
+
+        // Check signature
+        const bool valid_rsdp_sig = !memcmp(rsdp, "RSD PTR ", 8);
+        KERNEL_ASSERT(valid_rsdp_sig, "INVALID RSDP SIGNATURE");
+
+        uint8_t sum = 0;
+
+        for (int i = 0; i < 20; i++) sum += ((uint8_t*)rsdp)[i];
+        KERNEL_ASSERT(!sum, "INVALID RSDP");
+
+        // sum = 0 by condition
+        for (int i = 20; i < 36; i++) sum += ((uint8_t*)rsdp)[i];
+        KERNEL_ASSERT(!sum, "INVALID RSDP");
 }
 
     g_xsdt = (const XSDT*)get_virtual_acpi_address(rsdp->xsdt_phys_addr);
     KERNEL_ASSERT(g_xsdt, "XSDT VIRTUAL ADDRESS NOT FOUND");
+
+    bool valid_xsdt = sdt_is_valid(g_xsdt, "XSDT");
+    KERNEL_ASSERT(valid_xsdt, "INVALID XSDT");
 }
