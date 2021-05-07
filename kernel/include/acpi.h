@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "memory.h"
 
 typedef struct {
     char signature[4];
@@ -14,6 +15,7 @@ typedef struct {
     uint32_t creator_revision;
 } __attribute__((packed)) ACPISDTHeader;
 
-bool find_table(const char* signature, void** table_ptr);
+void prepare_acpi_memory(void* uefi_memory_map);
+void initialize_acpi(PhysicalAddress rsdp_ptr);
 
-void initialize_acpi(void* rsdp);
+VirtualAddress get_virtual_acpi_address(PhysicalAddress physical);
