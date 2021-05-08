@@ -22,6 +22,9 @@ void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
 // Get the size of blocks of specified order
 uint64_t get_order_block_size(uint8_t order);
 
+// Frees frame allocation list
+void free_frame_allocation_entries(PageFrameAllocation* allocations);
+
 // Allocate page frames (allocation may consist of several non-contiguos blocks)
 // Underlying memory for PageFrameAllocation structs is owned by the allocator
 PageFrameAllocation* alloc_frames(uint64_t pages);
