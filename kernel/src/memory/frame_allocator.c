@@ -29,6 +29,20 @@ uint64_t get_order_block_size(uint8_t order) {
     return g_block_sizes[order];
 }
 
+uint8_t get_min_size_order(uint64_t pages) {
+    KERNEL_ASSERT(pages != 0, "Can't have a zero sized allocation")
+
+    const uint64_t order_0_blocks =
+        MIN_BLOCK_SIZE == PAGE_SIZE
+            ? pages
+            : ((pages * PAGE_SIZE) + g_block_sizes[0] - 1) / g_block_sizes[0];
+
+    // The result of __builtin_clzll is undefined when input is zero
+    if (order_0_blocks == 1) return 0;
+
+    return MIN(64 - __builtin_clzll(order_0_blocks - 1), FRAME_ORDERS);
+}
+
 void free_frame_allocation_entries(PageFrameAllocation* allocations) {
     while (allocations != 0) {
         MemoryEntry* memory_entry = (MemoryEntry*)allocations;
