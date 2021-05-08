@@ -7,6 +7,18 @@
 
 uint64_t g_memory_size = 0;
 
+void* alloc_pages(uint64_t pages, PagingFlags paging_flags) {
+    PageFrameAllocation* allocation = alloc_frames(pages);
+    if (allocation == 0) return 0;
+
+    void* ptr = (void*)map_allocation(allocation, paging_flags);
+
+    free_frame_allocation_entries(allocation);
+    return ptr;
+}
+
+void free_pages(void* ptr, uint64_t pages) { unmap_and_free_frames((VirtualAddress)ptr, pages); }
+
 uint64_t get_memory_size() { return g_memory_size; }
 
 void initialize_memory(void* uefi_memory_map, PhysicalAddress* kernel_phys_addr,
