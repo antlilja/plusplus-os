@@ -1,5 +1,5 @@
 #pragma once
-#include "memory.h"
+#include "memory/defs.h"
 #include "memory/frame_allocator.h"
 
 #define PAGING_WRITABLE 1
