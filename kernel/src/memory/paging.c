@@ -309,10 +309,10 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
     add_range_to_free_list(virt_addr, pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
+    PageEntry* pt = get_page_entries(&pd[pt_index]);
     for (uint64_t i = 0; i < pages; ++i) {
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         pt[index].value = 0;
