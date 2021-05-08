@@ -164,6 +164,15 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
     }
 }
 
+void add_range_to_free_list(VirtualAddress virt_addr, uint64_t pages) {
+    FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
+    entry->addr = virt_addr >> 12;
+    entry->pages = pages;
+
+    entry->next = (VirtualAddress)g_kernel_map.free_list;
+    g_kernel_map.free_list = entry;
+}
+
 VirtualAddress alloc_addr_space(uint64_t pages) {
     // Find previously used address space
     FreeListEntry* entry = g_kernel_map.free_list;
@@ -297,15 +306,7 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags 
 }
 
 void unmap(VirtualAddress virt_addr, uint64_t pages) {
-    // Add range to free list
-    {
-        FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
-        entry->addr = virt_addr >> 12;
-        entry->pages = pages;
-
-        entry->next = (VirtualAddress)g_kernel_map.free_list;
-        g_kernel_map.free_list = entry;
-    }
+    add_range_to_free_list(virt_addr, pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
     PageEntry* pd = get_or_alloc_page_entries(&g_kernel_pdp[pd_index]);
