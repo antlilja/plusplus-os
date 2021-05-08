@@ -325,6 +325,56 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
     }
 }
 
+void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
+    add_range_to_free_list(virt_addr, pages);
+
+    uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
+    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+
+    uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
+    PageEntry* pt = get_page_entries(&pd[pt_index]);
+
+    PhysicalAddress start_phys_addr;
+    PhysicalAddress curr_phys_addr;
+    PhysicalAddress frame_pages = 0;
+    for (uint64_t i = 0; i < pages; ++i) {
+        const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
+
+        if (frame_pages == 0) {
+            start_phys_addr = curr_phys_addr = (pt[index].phys_addr << 12);
+            frame_pages = 1;
+        }
+        else {
+            curr_phys_addr += PAGE_SIZE;
+
+            if (curr_phys_addr != (pt[index].phys_addr << 12)) {
+                KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1,
+                              "Allocation is not power of 2")
+                const uint8_t order = get_min_size_order(frame_pages);
+                free_frames_contiguos(start_phys_addr, order);
+                frame_pages = 0;
+            }
+            else {
+                ++frame_pages;
+            }
+        }
+
+        pt[index].value = 0;
+
+        // Invalidate TLB entry for page belonging to virtual address
+        asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
+
+        virt_addr += PAGE_SIZE;
+        page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+    }
+
+    if (frame_pages != 0) {
+        KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1, "Allocation is not power of 2")
+        const uint8_t order = get_min_size_order(frame_pages);
+        free_frames_contiguos(start_phys_addr, order);
+    }
+}
+
 bool get_physical_address(VirtualAddress virt_addr, PhysicalAddress* phys_addr) {
     const uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
     const PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
