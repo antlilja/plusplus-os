@@ -258,7 +258,8 @@ void free_frames(PageFrameAllocation* allocation) {
     }
 }
 
-bool alloc_frames_contiguos(uint8_t order_to_alloc, PhysicalAddress* out_addr) {
+bool alloc_frames_contiguos(uint64_t pages, PhysicalAddress* out_addr) {
+    const uint8_t order_to_alloc = get_min_size_order(pages);
     KERNEL_ASSERT(order_to_alloc < FRAME_ORDERS, "Not an order")
 
     // Split bigger blocks if none of the correct size are available
@@ -294,10 +295,10 @@ bool alloc_frames_contiguos(uint8_t order_to_alloc, PhysicalAddress* out_addr) {
     return true;
 }
 
-void free_frames_contiguos(PhysicalAddress addr, uint8_t order) {
+void free_frames_contiguos(PhysicalAddress addr, uint64_t pages) {
     PageFrameAllocation* allocation = (PageFrameAllocation*)get_memory_entry();
     allocation->addr = addr;
-    allocation->order = order;
+    allocation->order = get_min_size_order(pages);
 
     free_frames(allocation);
 }

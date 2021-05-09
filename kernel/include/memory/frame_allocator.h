@@ -38,7 +38,7 @@ PageFrameAllocation* alloc_frames(uint64_t pages);
 void free_frames(PageFrameAllocation* allocation);
 
 // Allocate a block of contiguos memory (useful for DMA)
-bool alloc_frames_contiguos(uint8_t order, PhysicalAddress* out_addr);
+bool alloc_frames_contiguos(uint64_t pages, PhysicalAddress* out_addr);
 
 // Free block of contiguos memory
-void free_frames_contiguos(PhysicalAddress addr, uint8_t order);
+void free_frames_contiguos(PhysicalAddress addr, uint64_t pages);

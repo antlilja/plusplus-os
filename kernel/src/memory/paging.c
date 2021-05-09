@@ -350,8 +350,7 @@ void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
             if (curr_phys_addr != (pt[index].phys_addr << 12)) {
                 KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1,
                               "Allocation is not power of 2")
-                const uint8_t order = get_min_size_order(frame_pages);
-                free_frames_contiguos(start_phys_addr, order);
+                free_frames_contiguos(start_phys_addr, frame_pages);
                 frame_pages = 0;
             }
             else {
@@ -370,8 +369,7 @@ void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
 
     if (frame_pages != 0) {
         KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1, "Allocation is not power of 2")
-        const uint8_t order = get_min_size_order(frame_pages);
-        free_frames_contiguos(start_phys_addr, order);
+        free_frames_contiguos(start_phys_addr, frame_pages);
     }
 }
 
@@ -406,15 +404,17 @@ void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map) {
                     while (size != 0) {
                         uint8_t order = 0;
                         for (; order < FRAME_ORDERS; ++order) {
-                            if (get_order_block_size(order) > size ||
-                                phys_addr % get_order_block_size(order) != 0)
-                                break;
+                            const uint64_t order_size = get_order_block_size(order);
+                            if (order_size > size || (phys_addr % order_size) != 0) break;
                         }
                         --order;
 
-                        free_frames_contiguos(phys_addr, order);
-                        size -= get_order_block_size(order);
-                        phys_addr += get_order_block_size(order);
+                        KERNEL_ASSERT(order < FRAME_ORDERS, "Order does not exist")
+
+                        const uint64_t order_size = get_order_block_size(order);
+                        free_frames_contiguos(phys_addr, order_size / PAGE_SIZE);
+                        size -= order_size;
+                        phys_addr += order_size;
                     }
                     break;
                 }
