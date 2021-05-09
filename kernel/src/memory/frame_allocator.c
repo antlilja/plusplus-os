@@ -190,6 +190,8 @@ void free_frames(PageFrameAllocation* allocation) {
     while (allocation != 0) {
         uint8_t order = allocation->order;
 
+        KERNEL_ASSERT(order < FRAME_ORDERS, "Not an order")
+
         // Convert allocation to entry
         ListEntry* entry = (ListEntry*)allocation;
         entry->addr = allocation->addr;
