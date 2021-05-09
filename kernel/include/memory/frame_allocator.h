@@ -22,9 +22,9 @@ void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
 // Get the size of the specified frame order
 uint64_t get_frame_order_size(uint8_t order);
 
-// Get the min size order from number of pages
+// Get the min size frame order from number of pages
 // Return FRAME_ORDERS if order doesn't exist
-uint8_t get_min_size_order(uint64_t pages);
+uint8_t get_min_size_frame_order(uint64_t pages);
 
 // Frees frame allocation list
 void free_frame_allocation_entries(PageFrameAllocation* allocations);

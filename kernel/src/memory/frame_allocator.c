@@ -29,7 +29,7 @@ uint64_t get_frame_order_size(uint8_t order) {
     return g_block_sizes[order];
 }
 
-uint8_t get_min_size_order(uint64_t pages) {
+uint8_t get_min_size_frame_order(uint64_t pages) {
     KERNEL_ASSERT(pages != 0, "Can't have a zero sized allocation")
 
     const uint64_t order_0_blocks =
@@ -259,7 +259,7 @@ void free_frames(PageFrameAllocation* allocation) {
 }
 
 bool alloc_frames_contiguos(uint64_t pages, PhysicalAddress* out_addr) {
-    const uint8_t order_to_alloc = get_min_size_order(pages);
+    const uint8_t order_to_alloc = get_min_size_frame_order(pages);
     KERNEL_ASSERT(order_to_alloc < FRAME_ORDERS, "Not an order")
 
     // Split bigger blocks if none of the correct size are available
@@ -298,7 +298,7 @@ bool alloc_frames_contiguos(uint64_t pages, PhysicalAddress* out_addr) {
 void free_frames_contiguos(PhysicalAddress addr, uint64_t pages) {
     PageFrameAllocation* allocation = (PageFrameAllocation*)get_memory_entry();
     allocation->addr = addr;
-    allocation->order = get_min_size_order(pages);
+    allocation->order = get_min_size_frame_order(pages);
 
     free_frames(allocation);
 }
