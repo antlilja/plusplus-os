@@ -19,6 +19,22 @@ void* alloc_pages(uint64_t pages, PagingFlags paging_flags) {
 
 void free_pages(void* ptr, uint64_t pages) { unmap_and_free_frames((VirtualAddress)ptr, pages); }
 
+void* alloc_pages_contiguous(uint64_t pages, PagingFlags paging_flags) {
+    PhysicalAddress phys_addr;
+    if (!alloc_frames_contiguos(pages, &phys_addr)) return 0;
+
+    return (void*)map_range(phys_addr, pages, paging_flags);
+}
+
+void free_pages_contiguous(void* ptr, uint64_t pages) {
+    PhysicalAddress phys_addr;
+    const bool success = get_physical_address((VirtualAddress)ptr, &phys_addr);
+    KERNEL_ASSERT(success, "Physical address does not exist");
+
+    unmap((VirtualAddress)ptr, pages);
+    free_frames_contiguos(phys_addr, pages);
+}
+
 uint64_t get_memory_size() { return g_memory_size; }
 
 void initialize_memory(void* uefi_memory_map, PhysicalAddress* kernel_phys_addr,
