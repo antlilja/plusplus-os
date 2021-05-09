@@ -24,7 +24,7 @@ struct {
 
 uint64_t g_block_sizes[FRAME_ORDERS];
 
-uint64_t get_order_block_size(uint8_t order) {
+uint64_t get_frame_order_size(uint8_t order) {
     KERNEL_ASSERT(order < FRAME_ORDERS, "Not an order")
     return g_block_sizes[order];
 }

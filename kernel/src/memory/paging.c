@@ -126,7 +126,7 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
 
             while (allocation != 0) {
                 // Add page to page entry mapping list
-                uint64_t size = get_order_block_size(allocation->order);
+                uint64_t size = get_frame_order_size(allocation->order);
                 PhysicalAddress phys_addr = allocation->addr;
                 while (size != 0) {
                     MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
@@ -266,7 +266,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     {
         PageFrameAllocation* alloc = allocation;
         while (alloc != 0) {
-            size += get_order_block_size(alloc->order);
+            size += get_frame_order_size(alloc->order);
             alloc = alloc->next;
         }
     }
@@ -281,7 +281,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
 
     while (allocation != 0) {
-        uint64_t allocation_size = get_order_block_size(allocation->order);
+        uint64_t allocation_size = get_frame_order_size(allocation->order);
         uint64_t pages = allocation_size / PAGE_SIZE;
         map_range_helper(
             curr_virt_addr, allocation->addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
@@ -404,14 +404,14 @@ void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map) {
                     while (size != 0) {
                         uint8_t order = 0;
                         for (; order < FRAME_ORDERS; ++order) {
-                            const uint64_t order_size = get_order_block_size(order);
+                            const uint64_t order_size = get_frame_order_size(order);
                             if (order_size > size || (phys_addr % order_size) != 0) break;
                         }
                         --order;
 
                         KERNEL_ASSERT(order < FRAME_ORDERS, "Order does not exist")
 
-                        const uint64_t order_size = get_order_block_size(order);
+                        const uint64_t order_size = get_frame_order_size(order);
                         free_frames_contiguos(phys_addr, order_size / PAGE_SIZE);
                         size -= order_size;
                         phys_addr += order_size;

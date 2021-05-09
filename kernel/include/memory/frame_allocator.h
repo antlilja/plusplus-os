@@ -19,8 +19,8 @@ void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_a
 void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
                                 void* uefi_memory_map, uint64_t entry_pool_pages);
 
-// Get the size of blocks of specified order
-uint64_t get_order_block_size(uint8_t order);
+// Get the size of the specified frame order
+uint64_t get_frame_order_size(uint8_t order);
 
 // Get the min size order from number of pages
 // Return FRAME_ORDERS if order doesn't exist
