@@ -104,7 +104,6 @@ extern char s_kernel_rodata_start;
 extern char s_kernel_rodata_end;
 extern char s_kernel_data_start;
 extern char s_kernel_data_end;
-extern char s_stack_top;
 
 PageEntry* get_page_entries(const PageEntry* entry, uint8_t level) {
     PhysicalAddress phys_addr = entry->phys_addr;
