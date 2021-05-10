@@ -65,18 +65,21 @@ typedef struct {
 typedef MappingEntry PagePoolEntry;
 
 PageEntry __attribute__((aligned(0x1000))) g_pml4[512] = {0};
-PageEntry __attribute__((aligned(0x1000))) g_kernel_pdp[512] = {0};
 
 bool g_paging_execute_disable = false;
 
 struct {
     VirtualAddress current_address;
+
+    PageEntry* pdp;
+
     FreeListEntry* free_list;
 
     // Holds physical to virtual mapping of page table entries
     MappingEntry* entry_map;
 } g_kernel_map = {
     .current_address = KERNEL_OFFSET,
+    .pdp = 0,
     .free_list = 0,
     .entry_map = 0,
 };
@@ -206,7 +209,7 @@ void page_table_traversal_helper(VirtualAddress virt_addr, uint16_t* pd_index, P
         *pd_index = new_pd_index;
         *pt_index = 0;
 
-        *pd_ptr = get_or_alloc_page_entries(&g_kernel_pdp[*pd_index]);
+        *pd_ptr = get_or_alloc_page_entries(&g_kernel_map.pdp[*pd_index]);
 
         PageEntry* pd = *pd_ptr;
         *pt_ptr = get_or_alloc_page_entries(&pd[*pt_index]);
@@ -256,7 +259,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     VirtualAddress curr_virt_addr = virt_addr;
 
     uint16_t pd_index = GET_LEVEL_INDEX(curr_virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_map.pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(curr_virt_addr, PD);
     PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
@@ -277,7 +280,7 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags 
     const VirtualAddress virt_addr = alloc_addr_space(pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_map.pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
     PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
@@ -290,7 +293,7 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
     add_range_to_free_list(virt_addr, pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_page_entries(&g_kernel_map.pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
     PageEntry* pt = get_page_entries(&pd[pt_index]);
@@ -310,7 +313,7 @@ void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
     add_range_to_free_list(virt_addr, pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_page_entries(&g_kernel_map.pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
     PageEntry* pt = get_page_entries(&pd[pt_index]);
@@ -356,7 +359,7 @@ void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
 
 bool get_physical_address(VirtualAddress virt_addr, PhysicalAddress* phys_addr) {
     const uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    const PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+    const PageEntry* pd = get_page_entries(&g_kernel_map.pdp[pd_index]);
     if (pd == 0) return false;
 
     const uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
@@ -453,6 +456,8 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     const uint64_t total_size =
         kernel_size + starting_pool_size + frame_allocator_size + memory_entries_size;
 
+    const uint64_t pdp_count = 1;
+
     uint64_t pd_count = MAX(total_size / PD_MEM_RANGE, 1U);
 
     // Make sure we have room to map PD entries into virtual memory
@@ -464,7 +469,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     while ((pt_count * PT_MEM_RANGE - total_size) < (pt_count + pd_count) * PAGE_SIZE) ++pt_count;
 
     const uint64_t pages_to_allocate =
-        pd_count + pt_count + ((starting_pool_size + memory_entries_size) / PAGE_SIZE);
+        pdp_count + pd_count + pt_count + ((starting_pool_size + memory_entries_size) / PAGE_SIZE);
 
     KERNEL_ASSERT(pages_to_allocate * PAGE_SIZE < get_memory_size(),
                   "Memory initialization requires more memory than we have")
@@ -512,7 +517,10 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
         }
     }
 
-    g_pml4[KERNEL_PML4_OFFSET].phys_addr = (PhysicalAddress)g_kernel_pdp >> 12;
+    g_kernel_map.pdp = (PageEntry*)allocated_phys_addr;
+    allocated_phys_addr += PAGE_SIZE;
+
+    g_pml4[KERNEL_PML4_OFFSET].phys_addr = (PhysicalAddress)g_kernel_map.pdp >> 12;
     g_pml4[KERNEL_PML4_OFFSET].present = true;
     g_pml4[KERNEL_PML4_OFFSET].write = true;
 
@@ -523,9 +531,9 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
             PageEntry* pd = (PageEntry*)allocated_phys_addr;
             allocated_phys_addr += PAGE_SIZE;
 
-            g_kernel_pdp[i].phys_addr = (PhysicalAddress)pd >> 12;
-            g_kernel_pdp[i].present = true;
-            g_kernel_pdp[i].write = true;
+            g_kernel_map.pdp[i].phys_addr = (PhysicalAddress)pd >> 12;
+            g_kernel_map.pdp[i].present = true;
+            g_kernel_map.pdp[i].write = true;
 
             for (uint64_t j = 0; j < MIN(curr_pt_count, 512U); ++j) {
                 pd[j].phys_addr = (PhysicalAddress)allocated_phys_addr >> 12;
@@ -542,7 +550,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     {                                                                             \
         const uint16_t pd_index = GET_LEVEL_INDEX(_virt_addr, PDP);               \
         const uint16_t pt_index = GET_LEVEL_INDEX(_virt_addr, PD);                \
-        PageEntry* pd = (PageEntry*)(g_kernel_pdp[pd_index].phys_addr << 12);     \
+        PageEntry* pd = (PageEntry*)(g_kernel_map.pdp[pd_index].phys_addr << 12); \
         PageEntry* pt = (PageEntry*)(pd[pt_index].phys_addr << 12);               \
                                                                                   \
         const uint16_t index = GET_LEVEL_INDEX(_virt_addr, PT);                   \
@@ -627,6 +635,15 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
 
     // Map page entries into virtual memory
     {
+        {
+            const VirtualAddress virt_addr = SIGN_EXT_ADDR(g_kernel_map.current_address);
+            g_kernel_map.current_address += PAGE_SIZE;
+
+            MAP_PAGE(virt_addr, (PhysicalAddress)g_kernel_map.pdp >> 12, true, false)
+
+            g_kernel_map.pdp = (PageEntry*)virt_addr;
+        }
+
         uint64_t curr_pt_count = pt_count;
         for (uint64_t i = 0; i < pd_count; ++i) {
             // Map PD entry
@@ -634,17 +651,17 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
                 const VirtualAddress virt_addr = SIGN_EXT_ADDR(g_kernel_map.current_address);
                 g_kernel_map.current_address += PAGE_SIZE;
 
-                MAP_PAGE(virt_addr, g_kernel_pdp[i].phys_addr, true, false)
+                MAP_PAGE(virt_addr, g_kernel_map.pdp[i].phys_addr, true, false)
 
                 MappingEntry* entry = (MappingEntry*)get_memory_entry();
                 entry->next = (VirtualAddress)g_kernel_map.entry_map;
-                entry->phys_addr = g_kernel_pdp[i].phys_addr;
+                entry->phys_addr = g_kernel_map.pdp[i].phys_addr;
                 entry->virt_addr = virt_addr >> 12;
                 g_kernel_map.entry_map = entry;
             }
 
             // Map PT entries
-            PageEntry* pd = (PageEntry*)(g_kernel_pdp[i].phys_addr << 12);
+            PageEntry* pd = (PageEntry*)(g_kernel_map.pdp[i].phys_addr << 12);
             for (uint64_t j = 0; j < MIN(curr_pt_count, 512U); ++j) {
                 const VirtualAddress virt_addr = g_kernel_map.current_address;
                 g_kernel_map.current_address += PAGE_SIZE;
