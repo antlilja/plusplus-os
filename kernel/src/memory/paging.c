@@ -482,7 +482,14 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     // Make sure we have room to map PT entries into virtual memory
     while ((pt_count * PT_MEM_RANGE - total_size) < (pt_count + pd_count) * PAGE_SIZE) ++pt_count;
 
-    const uint64_t pages_to_allocate = pd_count + pt_count;
+    const uint64_t pages_to_allocate =
+        pd_count + pt_count + ((starting_pool_size + memory_entries_size) / PAGE_SIZE);
+
+    KERNEL_ASSERT(pages_to_allocate * PAGE_SIZE < get_memory_size(),
+                  "Memory initialization requires more memory than we have")
+
+    KERNEL_ASSERT(pages_to_allocate * PAGE_SIZE < PDP_MEM_RANGE,
+                  "Memory initialization requires more than 512GB")
 
     // Allocate pages required by page table and address allocator
     PhysicalAddress allocated_phys_addr = 0;
