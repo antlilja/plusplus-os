@@ -5,6 +5,7 @@
 #include "idt.h"
 #include "acpi.h"
 #include "pci.h"
+#include "apic.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -83,6 +84,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
 
     enumerate_pci_devices();
     put_string("PCI devices enumerated", 10, 17);
+
+    setup_apic();
+    put_string("APIC(s) set up and usable", 10, 18);
 
     // This function can't return
     while (1)
