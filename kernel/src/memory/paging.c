@@ -155,7 +155,6 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
         entry->phys_addr = pool_entry->phys_addr;
         entry->present = true;
         entry->write = true;
-        entry->execute_disable = g_paging_execute_disable;
 
         PageEntry* entries = (PageEntry*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12);
 
