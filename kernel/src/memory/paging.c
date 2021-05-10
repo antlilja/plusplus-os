@@ -126,7 +126,7 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
 
             while (allocation != 0) {
                 // Add page to page entry mapping list
-                uint64_t size = get_order_block_size(allocation->order);
+                uint64_t size = get_frame_order_size(allocation->order);
                 PhysicalAddress phys_addr = allocation->addr;
                 while (size != 0) {
                     MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
@@ -162,6 +162,15 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
 
         return entries;
     }
+}
+
+void add_range_to_free_list(VirtualAddress virt_addr, uint64_t pages) {
+    FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
+    entry->addr = virt_addr >> 12;
+    entry->pages = pages;
+
+    entry->next = (VirtualAddress)g_kernel_map.free_list;
+    g_kernel_map.free_list = entry;
 }
 
 VirtualAddress alloc_addr_space(uint64_t pages) {
@@ -257,7 +266,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     {
         PageFrameAllocation* alloc = allocation;
         while (alloc != 0) {
-            size += get_order_block_size(alloc->order);
+            size += get_frame_order_size(alloc->order);
             alloc = alloc->next;
         }
     }
@@ -272,7 +281,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
 
     while (allocation != 0) {
-        uint64_t allocation_size = get_order_block_size(allocation->order);
+        uint64_t allocation_size = get_frame_order_size(allocation->order);
         uint64_t pages = allocation_size / PAGE_SIZE;
         map_range_helper(
             curr_virt_addr, allocation->addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
@@ -297,21 +306,13 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags 
 }
 
 void unmap(VirtualAddress virt_addr, uint64_t pages) {
-    // Add range to free list
-    {
-        FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
-        entry->addr = virt_addr >> 12;
-        entry->pages = pages;
-
-        entry->next = (VirtualAddress)g_kernel_map.free_list;
-        g_kernel_map.free_list = entry;
-    }
+    add_range_to_free_list(virt_addr, pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
+    PageEntry* pt = get_page_entries(&pd[pt_index]);
     for (uint64_t i = 0; i < pages; ++i) {
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         pt[index].value = 0;
@@ -321,6 +322,54 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
 
         virt_addr += PAGE_SIZE;
         page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+    }
+}
+
+void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
+    add_range_to_free_list(virt_addr, pages);
+
+    uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
+    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+
+    uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
+    PageEntry* pt = get_page_entries(&pd[pt_index]);
+
+    PhysicalAddress start_phys_addr;
+    PhysicalAddress curr_phys_addr;
+    PhysicalAddress frame_pages = 0;
+    for (uint64_t i = 0; i < pages; ++i) {
+        const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
+
+        if (frame_pages == 0) {
+            start_phys_addr = curr_phys_addr = (pt[index].phys_addr << 12);
+            frame_pages = 1;
+        }
+        else {
+            curr_phys_addr += PAGE_SIZE;
+
+            if (curr_phys_addr != (pt[index].phys_addr << 12)) {
+                KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1,
+                              "Allocation is not power of 2")
+                free_frames_contiguos(start_phys_addr, frame_pages);
+                frame_pages = 0;
+            }
+            else {
+                ++frame_pages;
+            }
+        }
+
+        pt[index].value = 0;
+
+        // Invalidate TLB entry for page belonging to virtual address
+        asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
+
+        virt_addr += PAGE_SIZE;
+        page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+    }
+
+    if (frame_pages != 0) {
+        KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1, "Allocation is not power of 2")
+        free_frames_contiguos(start_phys_addr, frame_pages);
     }
 }
 
@@ -355,15 +404,17 @@ void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map) {
                     while (size != 0) {
                         uint8_t order = 0;
                         for (; order < FRAME_ORDERS; ++order) {
-                            if (get_order_block_size(order) > size ||
-                                phys_addr % get_order_block_size(order) != 0)
-                                break;
+                            const uint64_t order_size = get_frame_order_size(order);
+                            if (order_size > size || (phys_addr % order_size) != 0) break;
                         }
                         --order;
 
-                        free_frames_contiguos(phys_addr, order);
-                        size -= get_order_block_size(order);
-                        phys_addr += get_order_block_size(order);
+                        KERNEL_ASSERT(order < FRAME_ORDERS, "Order does not exist")
+
+                        const uint64_t order_size = get_frame_order_size(order);
+                        free_frames_contiguos(phys_addr, order_size / PAGE_SIZE);
+                        size -= order_size;
+                        phys_addr += order_size;
                     }
                     break;
                 }

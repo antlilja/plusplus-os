@@ -1,7 +1,5 @@
 #include "memory/entry_pool.h"
 
-#include "memory/paging.h"
-#include "memory/frame_allocator.h"
 #include "kassert.h"
 
 #define ENTRY_THRESHOLD 20
@@ -28,21 +26,12 @@ MemoryEntry* get_memory_entry() {
     if (g_memory_entry_pool.count < ENTRY_THRESHOLD) {
         g_memory_entry_pool.count += ENTRY_THRESHOLD;
 
-        PageFrameAllocation* allocation = alloc_frames(1);
-        KERNEL_ASSERT(allocation != 0, "Out of memory")
+        void* memory = alloc_pages(1, PAGING_WRITABLE);
+        KERNEL_ASSERT(memory != 0, "Out of memory")
 
-        const VirtualAddress virt_addr = map_allocation(allocation, PAGING_WRITABLE);
+        fill_memory_entry_pool((VirtualAddress)memory, 1);
 
         g_memory_entry_pool.count -= ENTRY_THRESHOLD;
-
-        fill_memory_entry_pool(virt_addr, 1);
-
-        while (allocation != 0) {
-            MemoryEntry* entry = (MemoryEntry*)allocation;
-            allocation = allocation->next;
-
-            free_memory_entry(entry);
-        }
     }
 
     MemoryEntry* entry = g_memory_entry_pool.head;

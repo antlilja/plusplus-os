@@ -1,5 +1,5 @@
 #pragma once
-#include "memory.h"
+#include "memory/defs.h"
 #include "memory/frame_allocator.h"
 
 #define PAGING_WRITABLE 1
@@ -19,6 +19,9 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags 
 
 // Unmaps virtual address space
 void unmap(VirtualAddress virt_addr, uint64_t pages);
+
+// Unmaps virtual address range and frees previously mapped frames
+void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages);
 
 // Translates a virtual address into the corresponding physical address
 // Returns false if the virtual address isn't mapped
