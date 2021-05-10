@@ -8,7 +8,7 @@
 
 #include <string.h>
 
-#define MIN_BLOCK_SIZE PAGE_SIZE
+#define MIN_FRAME_ORDER_SIZE PAGE_SIZE
 
 // Free list entry
 typedef struct {
@@ -33,7 +33,7 @@ uint8_t get_min_size_frame_order(uint64_t pages) {
     KERNEL_ASSERT(pages != 0, "Can't have a zero sized allocation")
 
     const uint64_t order_0_blocks =
-        MIN_BLOCK_SIZE == PAGE_SIZE
+        MIN_FRAME_ORDER_SIZE == PAGE_SIZE
             ? pages
             : ((pages * PAGE_SIZE) + g_block_sizes[0] - 1) / g_block_sizes[0];
 
@@ -373,7 +373,7 @@ bool remove_range(PhysicalAddress addr, uint64_t pages) {
 void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_addr,
                                   uint64_t* total_pages, uint64_t* entry_pool_pages) {
     // Calculate block sizes
-    g_block_sizes[0] = MIN_BLOCK_SIZE;
+    g_block_sizes[0] = MIN_FRAME_ORDER_SIZE;
     for (uint64_t i = 1; i < FRAME_ORDERS; ++i) {
         g_block_sizes[i] = g_block_sizes[i - 1] * 2;
     }
