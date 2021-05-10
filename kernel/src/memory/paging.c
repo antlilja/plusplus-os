@@ -126,40 +126,21 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
                 virt_addr += PAGE_SIZE;
             }
 
-            while (allocation != 0) {
-                // Add page to page entry mapping list
-                uint64_t size = get_frame_order_size(allocation->order);
-                PhysicalAddress phys_addr = allocation->addr;
-                while (size != 0) {
-                    MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
-                    mapping_entry->phys_addr = phys_addr >> 12;
-                    mapping_entry->virt_addr = virt_addr >> 12;
-                    mapping_entry->next = (VirtualAddress)g_page_entry_mapping_list;
-                    g_page_entry_mapping_list = mapping_entry;
-                    phys_addr += PAGE_SIZE;
-                    virt_addr += PAGE_SIZE;
-                    size -= PAGE_SIZE;
-                }
-
-                // Free allocation entry because we're not going free the memory anyway
-                MemoryEntry* entry = (MemoryEntry*)allocation;
-                allocation = allocation->next;
-                free_memory_entry(entry);
-            }
+            free_frame_allocation_entries(allocation);
         }
 
         PagePoolEntry* pool_entry = g_page_pool.head;
         g_page_pool.head = (PagePoolEntry*)SIGN_EXT_ADDR(pool_entry->next);
         --g_page_pool.count;
 
+        pool_entry->next = (VirtualAddress)g_page_entry_mapping_list;
+        g_page_entry_mapping_list = pool_entry;
+
         entry->phys_addr = pool_entry->phys_addr;
         entry->present = true;
         entry->write = true;
 
         PageEntry* entries = (PageEntry*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12);
-
-        free_memory_entry((MemoryEntry*)pool_entry);
-
         return entries;
     }
 }
@@ -619,23 +600,11 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
 
             MAP_PAGE(virt_addr, allocated_phys_addr >> 12, true, false)
 
-            // Add page to page pool
-            {
-                PagePoolEntry* pool_entry = (PagePoolEntry*)get_memory_entry();
-                pool_entry->next = (VirtualAddress)g_page_pool.head;
-                pool_entry->phys_addr = allocated_phys_addr >> 12;
-                pool_entry->virt_addr = virt_addr >> 12;
-                g_page_pool.head = pool_entry;
-            }
-
-            // Add page to page entry mapping list
-            {
-                MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
-                mapping_entry->phys_addr = allocated_phys_addr >> 12;
-                mapping_entry->virt_addr = virt_addr >> 12;
-                mapping_entry->next = (VirtualAddress)g_page_entry_mapping_list;
-                g_page_entry_mapping_list = mapping_entry;
-            }
+            PagePoolEntry* pool_entry = (PagePoolEntry*)get_memory_entry();
+            pool_entry->next = (VirtualAddress)g_page_pool.head;
+            pool_entry->phys_addr = allocated_phys_addr >> 12;
+            pool_entry->virt_addr = virt_addr >> 12;
+            g_page_pool.head = pool_entry;
 
             allocated_phys_addr += PAGE_SIZE;
         }
