@@ -51,6 +51,14 @@ typedef union {
 } PageEntry;
 
 typedef struct {
+    uint16_t pd_index;
+    PageEntry* pd;
+
+    uint16_t pt_index;
+    PageEntry* pt;
+} PageTableLocation;
+
+typedef struct {
     VirtualAddress next : 48;
     VirtualAddress addr : 36;
     uint64_t pages : 44;
@@ -149,6 +157,24 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry, uint8_t level) {
     }
 }
 
+__attribute__((always_inline)) void populate_page_table_location(VirtualAddress virt_addr,
+                                                                 PageTableLocation* location,
+                                                                 bool alloc_entries) {
+    location->pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
+    {
+        PageEntry* entry = &g_kernel_map.pdp[location->pd_index];
+        location->pd =
+            alloc_entries ? get_or_alloc_page_entries(entry, PD) : get_page_entries(entry, PD);
+    }
+
+    location->pt_index = GET_LEVEL_INDEX(virt_addr, PD);
+    {
+        PageEntry* entry = &location->pd[location->pt_index];
+        location->pt =
+            alloc_entries ? get_or_alloc_page_entries(entry, PT) : get_page_entries(entry, PT);
+    }
+}
+
 void add_range_to_free_list(VirtualAddress virt_addr, uint64_t pages) {
     FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
     entry->addr = virt_addr >> 12;
@@ -201,46 +227,42 @@ VirtualAddress alloc_addr_space(uint64_t pages) {
     return SIGN_EXT_ADDR(addr);
 }
 
-void page_table_traversal_helper(VirtualAddress virt_addr, uint16_t* pd_index, PageEntry** pd_ptr,
-                                 uint16_t* pt_index, PageEntry** pt_ptr) {
+void page_table_traversal_helper(VirtualAddress virt_addr, PageTableLocation* location) {
     const uint16_t new_pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
     const uint16_t new_pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    if (new_pd_index != *pd_index) {
-        *pd_index = new_pd_index;
-        *pt_index = 0;
+    if (new_pd_index != location->pd_index) {
+        location->pd_index = new_pd_index;
+        location->pt_index = 0;
 
-        *pd_ptr = get_or_alloc_page_entries(&g_kernel_map.pdp[*pd_index], PD);
+        location->pd = get_or_alloc_page_entries(&g_kernel_map.pdp[location->pd_index], PD);
 
-        PageEntry* pd = *pd_ptr;
-        *pt_ptr = get_or_alloc_page_entries(&pd[*pt_index], PT);
+        location->pt = get_or_alloc_page_entries(&location->pd[location->pt_index], PT);
     }
-    else if (new_pt_index != *pt_index) {
-        PageEntry* pd = *pd_ptr;
-        *pt_index = new_pt_index;
-        *pt_ptr = get_or_alloc_page_entries(&pd[*pt_index], PT);
+    else if (new_pt_index != location->pt_index) {
+        location->pt_index = new_pt_index;
+        location->pt = get_or_alloc_page_entries(&location->pd[location->pt_index], PT);
     }
 }
 
 void map_range_helper(VirtualAddress virt_addr, PhysicalAddress phys_addr, uint64_t pages,
-                      PagingFlags flags, uint16_t* pd_index, PageEntry** pd_ptr, uint16_t* pt_index,
-                      PageEntry** pt_ptr) {
+                      PagingFlags flags, PageTableLocation* location) {
     for (uint64_t i = 0; i < pages; ++i) {
-        PageEntry* pt = *pt_ptr;
 
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
-        pt[index].phys_addr = phys_addr >> 12;
-        pt[index].present = true;
-        pt[index].write = (flags & PAGING_WRITABLE) != 0;
-        pt[index].cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
-        pt[index].write_through = (flags & PAGING_WRITE_THROUGH) != 0;
-        pt[index].execute_disable = ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
+        location->pt[index].phys_addr = phys_addr >> 12;
+        location->pt[index].present = true;
+        location->pt[index].write = (flags & PAGING_WRITABLE) != 0;
+        location->pt[index].cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
+        location->pt[index].write_through = (flags & PAGING_WRITE_THROUGH) != 0;
+        location->pt[index].execute_disable =
+            ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
 
         // Invalidate TLB entry for page belonging to virtual address
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         phys_addr += PAGE_SIZE;
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(virt_addr, pd_index, pd_ptr, pt_index, pt_ptr);
+        page_table_traversal_helper(virt_addr, location);
     }
 }
 
@@ -258,17 +280,13 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     const VirtualAddress virt_addr = alloc_addr_space(size / PAGE_SIZE);
     VirtualAddress curr_virt_addr = virt_addr;
 
-    uint16_t pd_index = GET_LEVEL_INDEX(curr_virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_map.pdp[pd_index], PD);
-
-    uint16_t pt_index = GET_LEVEL_INDEX(curr_virt_addr, PD);
-    PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index], PT);
+    PageTableLocation location;
+    populate_page_table_location(virt_addr, &location, true);
 
     while (allocation != 0) {
         uint64_t allocation_size = get_frame_order_size(allocation->order);
         uint64_t pages = allocation_size / PAGE_SIZE;
-        map_range_helper(
-            curr_virt_addr, allocation->addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
+        map_range_helper(curr_virt_addr, allocation->addr, pages, flags, &location);
         allocation = allocation->next;
         curr_virt_addr += allocation_size;
     }
@@ -279,44 +297,36 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
 VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags flags) {
     const VirtualAddress virt_addr = alloc_addr_space(pages);
 
-    uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_map.pdp[pd_index], PD);
+    PageTableLocation location;
+    populate_page_table_location(virt_addr, &location, true);
 
-    uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index], PT);
-
-    map_range_helper(virt_addr, phys_addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
+    map_range_helper(virt_addr, phys_addr, pages, flags, &location);
     return virt_addr;
 }
 
 void unmap(VirtualAddress virt_addr, uint64_t pages) {
     add_range_to_free_list(virt_addr, pages);
 
-    uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_page_entries(&g_kernel_map.pdp[pd_index], PD);
+    PageTableLocation location;
+    populate_page_table_location(virt_addr, &location, false);
 
-    uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    PageEntry* pt = get_page_entries(&pd[pt_index], PT);
     for (uint64_t i = 0; i < pages; ++i) {
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
-        pt[index].value = 0;
+        location.pt[index].value = 0;
 
         // Invalidate TLB entry for page belonging to virtual address
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+        page_table_traversal_helper(virt_addr, &location);
     }
 }
 
 void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
     add_range_to_free_list(virt_addr, pages);
 
-    uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_page_entries(&g_kernel_map.pdp[pd_index], PD);
-
-    uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    PageEntry* pt = get_page_entries(&pd[pt_index], PT);
+    PageTableLocation location;
+    populate_page_table_location(virt_addr, &location, false);
 
     PhysicalAddress start_phys_addr;
     PhysicalAddress curr_phys_addr;
@@ -325,13 +335,13 @@ void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
 
         if (frame_pages == 0) {
-            start_phys_addr = curr_phys_addr = (pt[index].phys_addr << 12);
+            start_phys_addr = curr_phys_addr = (location.pt[index].phys_addr << 12);
             frame_pages = 1;
         }
         else {
             curr_phys_addr += PAGE_SIZE;
 
-            if (curr_phys_addr != (pt[index].phys_addr << 12)) {
+            if (curr_phys_addr != (location.pt[index].phys_addr << 12)) {
                 KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1,
                               "Allocation is not power of 2")
                 free_frames_contiguos(start_phys_addr, frame_pages);
@@ -342,13 +352,13 @@ void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
             }
         }
 
-        pt[index].value = 0;
+        location.pt[index].value = 0;
 
         // Invalidate TLB entry for page belonging to virtual address
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+        page_table_traversal_helper(virt_addr, &location);
     }
 
     if (frame_pages != 0) {
