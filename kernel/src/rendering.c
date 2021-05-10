@@ -14,8 +14,9 @@ void remap_framebuffer() {
 
     const uint64_t framebuffer_pages = framebuffer_size / PAGE_SIZE;
 
-    g_frame_buffer.address =
-        (void*)map_range((PhysicalAddress)g_frame_buffer.address, framebuffer_pages);
+    g_frame_buffer.address = (void*)map_range((PhysicalAddress)g_frame_buffer.address,
+                                              framebuffer_pages,
+                                              PAGING_WRITABLE | PAGING_CACHE_DISABLE);
 }
 
 void put_pixel(uint64_t x, uint64_t y, uint32_t color) {
