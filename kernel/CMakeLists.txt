@@ -10,6 +10,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/port_io.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/acpi.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/pci.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/apic.c
 
   # Memory
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.c
