@@ -14,6 +14,9 @@
 #define NON_MASKABLE_INTERRUPTS_ENTRY 4
 #define LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY 5
 
+#define APIC_BASE_MSR 0x1b
+#define APIC_BASE_MSR_ENABLE 0x800
+
 // Gets lower register offset for irq redtable entry
 #define REDTBL_OFFSET(irq) (2 * (irq) + 0x10)
 #define GET_BITRANGE_VALUE(num, lb, ub) (((num) & ((1U << (ub)) - (1U << (lb)))) >> (lb))
@@ -189,6 +192,30 @@ void setup_apic() {
         }
     }
 
+    { // Enable Local APIC
+
+        // Hardware enable LAPIC in case UEFI hasn't done so
+        {
+            uint32_t low, high;
+
+            // EAX is lower half and EDX is upper half of 64 bit register.
+            // ECX specifies which register to write to
+            asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(APIC_BASE_MSR));
+
+            // Set bit 11 to enable APIC
+            low |= APIC_BASE_MSR_ENABLE;
+
+            asm volatile("wrmsr" : : "a"(low), "d"(high), "c"(APIC_BASE_MSR));
+        }
+
+        // Page Local APIC
+        g_lapic =
+            (LocalAPIC*)map_range(local_apic_phys_addr, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+
+        // Set bit 8 of the Spurious Vector Register to enable the xAPIC
+        // Using 0xFF as the Spurious Vector because osdev said so
+        g_lapic->spurious_interrupt_vector = 0xFF | (1U << 8);
+    }
 }
 
 IOAPICInfo* get_responsible_ioapic(uint32_t gsi) {
