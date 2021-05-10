@@ -72,18 +72,19 @@ bool g_paging_execute_disable = false;
 struct {
     VirtualAddress current_address;
     FreeListEntry* free_list;
+
+    // Holds physical to virtual mapping of page table entries
+    MappingEntry* entry_map;
 } g_kernel_map = {
     .current_address = KERNEL_OFFSET,
     .free_list = 0,
+    .entry_map = 0,
 };
 
 struct {
     uint64_t count;
     PagePoolEntry* head;
 } g_page_pool = {0};
-
-// Holds physical to virtual mapping of page table entries
-MappingEntry* g_page_entry_mapping_list = 0;
 
 // See linker.ld
 extern char s_kernel_rodata_start;
@@ -94,7 +95,7 @@ extern char s_stack_top;
 
 PageEntry* get_page_entries(const PageEntry* entry) {
     PhysicalAddress phys_addr = entry->phys_addr;
-    MappingEntry* mapping = g_page_entry_mapping_list;
+    MappingEntry* mapping = g_kernel_map.entry_map;
     while (mapping != 0) {
         if (mapping->phys_addr == phys_addr) {
             return (PageEntry*)SIGN_EXT_ADDR(mapping->virt_addr << 12);
@@ -133,8 +134,8 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
         g_page_pool.head = (PagePoolEntry*)SIGN_EXT_ADDR(pool_entry->next);
         --g_page_pool.count;
 
-        pool_entry->next = (VirtualAddress)g_page_entry_mapping_list;
-        g_page_entry_mapping_list = pool_entry;
+        pool_entry->next = (VirtualAddress)g_kernel_map.entry_map;
+        g_kernel_map.entry_map = pool_entry;
 
         entry->phys_addr = pool_entry->phys_addr;
         entry->present = true;
@@ -636,10 +637,10 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
                 MAP_PAGE(virt_addr, g_kernel_pdp[i].phys_addr, true, false)
 
                 MappingEntry* entry = (MappingEntry*)get_memory_entry();
-                entry->next = (VirtualAddress)g_page_entry_mapping_list;
+                entry->next = (VirtualAddress)g_kernel_map.entry_map;
                 entry->phys_addr = g_kernel_pdp[i].phys_addr;
                 entry->virt_addr = virt_addr >> 12;
-                g_page_entry_mapping_list = entry;
+                g_kernel_map.entry_map = entry;
             }
 
             // Map PT entries
@@ -651,10 +652,10 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
                 MAP_PAGE(virt_addr, pd[j].phys_addr, true, false)
 
                 MappingEntry* entry = (MappingEntry*)get_memory_entry();
-                entry->next = (VirtualAddress)g_page_entry_mapping_list;
+                entry->next = (VirtualAddress)g_kernel_map.entry_map;
                 entry->phys_addr = pd[j].phys_addr;
                 entry->virt_addr = virt_addr >> 12;
-                g_page_entry_mapping_list = entry;
+                g_kernel_map.entry_map = entry;
             }
             curr_pt_count -= 512;
         }
