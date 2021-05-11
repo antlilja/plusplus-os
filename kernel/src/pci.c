@@ -1,98 +1,100 @@
-#include <stdint.h>
-#include <stdbool.h>
-#include "port_io.h"
 #include "pci.h"
 
-#define PCI_REG_CONFIG_ADDRESS 0xCF8
-#define PCI_REG_CONFIG_DATA 0xCFC
+#include "kassert.h"
+#include "acpi.h"
+#include "memory/paging.h"
+#include "memory/entry_pool.h"
 
-#define VENDOR_ID_OFFSET 0x00
-#define HEADER_TYPE_OFFSET 0x0E
-// bottom offset for u32 containg Class code, Subclass, Prog IF and Revision ID
-#define DEVICE_TYPE_OFFSET 0x08
+#include <string.h>
 
-#define DEVICE_CLASS_MASK 0xff000000
-#define DEVICE_SUBCLASS_MASK 0xffff0000
-#define DEVICE_PROG_IF_MASK 0xffffff00
+typedef struct {
+    ACPISDTHeader header;
+    uint8_t reserved[8];
+} __attribute__((packed)) MCFG;
 
-#define CONFIG_ADDRESS_ZERO 0x80000000
+typedef struct {
+    PhysicalAddress base_address;
+    uint16_t segment_group;
+    uint8_t start_bus;
+    uint8_t end_bus;
+    uint8_t reserved[4];
+} __attribute__((packed)) MCFGEntry;
 
-// black-box, don't look!
-__attribute__((always_inline)) uint32_t create_config_address(uint8_t bus, uint8_t slot,
-                                                              uint8_t func, uint8_t offset) {
-    return (uint32_t)(((uint32_t)bus << 16) | ((uint32_t)(slot & 0x1F) << 11) |
-                      ((uint32_t)(func & 0x7) << 8) | ((uint32_t)offset & 0xfc) |
-                      ((uint32_t)0x80000000));
-}
+typedef struct {
+    VirtualAddress next : 48;
+    VirtualAddress config_space : 36;
+    union {
+        struct {
+            uint8_t revision_ID;
+            uint8_t prog_IF;
+            uint8_t subclass;
+            uint8_t class_code;
+        } __attribute__((packed));
+        uint32_t type;
+    };
+    uint8_t padding;
+} __attribute__((packed)) PCIDeviceEntry;
 
-uint8_t pci_read_config_u8(uint32_t base_address, uint8_t offset) {
-    uint32_t config_address = (base_address & 0xffffff00) | (offset & ~0b11);
-    port_out_u32(PCI_REG_CONFIG_ADDRESS, config_address);
-    uint32_t config_data = port_in_u32(PCI_REG_CONFIG_DATA) >> ((offset & 0b11) * 8);
-    return (uint8_t)(config_data & 0xff);
-}
+PCIDeviceEntry* g_pci_device_list = 0;
 
-uint16_t pci_read_config_u16(uint32_t base_address, uint8_t offset) {
-    uint32_t config_address = (base_address & 0xffffff00) | (offset & ~0b11);
-    port_out_u32(PCI_REG_CONFIG_ADDRESS, config_address);
-    uint32_t config_data = port_in_u32(PCI_REG_CONFIG_DATA) >> ((offset & 0b10) * 8);
-    return (uint16_t)(config_data & 0xffff);
-}
+PCIConfigSpace0* get_pci_device(uint32_t type, uint32_t mask) {
+    PCIDeviceEntry* device_entry = g_pci_device_list;
+    while (device_entry != 0) {
+        if ((device_entry->type & mask) == type)
+            return (PCIConfigSpace0*)SIGN_EXT_ADDR(device_entry->config_space << 12);
 
-uint32_t pci_read_config_u32(uint32_t base_address, uint8_t offset) {
-    uint32_t config_address = (base_address & 0xffffff00) | (offset & ~0b11);
-    port_out_u32(PCI_REG_CONFIG_ADDRESS, config_address);
-    uint32_t config_data = port_in_u32(PCI_REG_CONFIG_DATA);
-    return config_data;
-}
-
-// uses vendor ID to check if device exists
-bool device_exists(uint32_t address) {
-    return pci_read_config_u16(address, VENDOR_ID_OFFSET) != 0xffff;
-}
-
-// returns true if device has multiple distinct functions
-bool device_is_multi_func(uint32_t address) {
-    return (pci_read_config_u8(address, HEADER_TYPE_OFFSET) & 0x80) != 0;
-}
-
-// Returns the next valid address
-uint32_t next_base_address(uint32_t last) {
-    if (last == 0) return CONFIG_ADDRESS_ZERO; // Special exception, return first address.
-    uint32_t bus = (last & 0x00ff0000) >> 16;
-    uint32_t slot = (last & 0x0000f800) >> 11;
-    uint32_t func = (last & 0x00000700) >> 8;
-
-    func++;
-    // skips to next slot if this slot's func 0 is either empty or non-multi func
-    if (func < 8 && (func > 1 || (device_exists(last) && device_is_multi_func(last)))) {
-        return create_config_address(bus, slot, func, 0);
+        device_entry = (PCIDeviceEntry*)SIGN_EXT_ADDR(device_entry->next);
     }
 
-    func = 0;
-    slot++;
-    if (slot < 32) {
-        return create_config_address(bus, slot, func, 0);
-    }
-
-    slot = 0;
-    bus++;
-    if (bus < 256) {
-        return create_config_address(bus, slot, func, 0);
-    }
-    return 0; // No remaining addresses
+    return 0;
 }
 
-uint32_t pci_find_next_device(uint32_t target_device_type, uint32_t mask, uint32_t start) {
-    uint32_t address = start;
-    do {
-        address = next_base_address(address);
-        if (device_exists(address)) {
-            uint32_t device_type = pci_read_config_u32(address, DEVICE_TYPE_OFFSET);
-            if ((device_type & mask) == (target_device_type & mask)) {
-                return address;
+void enumerate_pci_devices() {
+    _Static_assert(sizeof(PCIDeviceEntry) == 16, "PCIDeviceEntry not 16 bytes");
+
+    const MCFG* mcfg = (const MCFG*)find_table("MCFG");
+    KERNEL_ASSERT(mcfg, "MCFG TABLE NOT FOUND");
+
+    const VirtualAddress mcfg_addr = (VirtualAddress)mcfg;
+    const MCFGEntry* mcfg_arr = (MCFGEntry*)(mcfg_addr + sizeof(MCFG));
+    const uint64_t entries = (mcfg->header.length - sizeof(MCFG)) / sizeof(MCFGEntry);
+
+    for (uint64_t i = 0; i < entries; ++i) {
+        const PhysicalAddress base_phys_addr = mcfg_arr[i].base_address;
+        for (uint16_t bus = mcfg_arr[i].start_bus; bus < mcfg_arr[i].end_bus; ++bus) {
+            for (uint8_t device = 0; device < 32; ++device) {
+                for (uint8_t func = 0; func < 8; ++func) {
+
+                    PhysicalAddress config_phys_addr =
+                        base_phys_addr + ((bus << 20) | (device << 15) | (func << 12));
+
+                    const PCIConfigSpace0* config_space = (const PCIConfigSpace0*)map_range(
+                        config_phys_addr, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+
+                    const bool exists = config_space->vendor_id != 0xffff;
+                    const bool is_multi_func = (config_space->header_type & 0x80) != 0;
+
+                    if (func > 0 && !is_multi_func) {
+                        unmap((VirtualAddress)config_space, 1);
+                        break;
+                    }
+
+                    if (!exists) {
+                        unmap((VirtualAddress)config_space, 1);
+                        continue;
+                    }
+
+                    PCIDeviceEntry* device_entry = (PCIDeviceEntry*)get_memory_entry();
+                    device_entry->revision_ID = config_space->revision_ID;
+                    device_entry->prog_IF = config_space->prog_IF;
+                    device_entry->subclass = config_space->subclass;
+                    device_entry->class_code = config_space->class_code;
+                    device_entry->config_space = ((VirtualAddress)config_space) >> 12;
+
+                    device_entry->next = (VirtualAddress)g_pci_device_list;
+                    g_pci_device_list = device_entry;
+                }
             }
         }
-    } while (address != 0);
-    return 0;
+    }
 }
