@@ -42,6 +42,21 @@ typedef struct {
     VirtualAddress virt_addr : 36;
     PhysicalAddress phys_addr : 38;
 } __attribute__((packed)) MappingEntry;
+
+typedef struct {
+    VirtualAddress current_address;
+
+    uint16_t pdp_index;
+    PageEntry* pdp;
+
+    uint8_t prot : 4;
+
+    FreeListEntry* free_list;
+
+    // Holds physical to virtual mapping of page table entries
+    MappingEntry* entry_maps[2];
+} AddressSpace;
+
 // Maps discrete allocations into contiguos virtual address space
 VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags);
 

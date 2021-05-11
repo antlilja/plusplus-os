@@ -44,20 +44,11 @@ PageEntry __attribute__((aligned(0x1000))) g_pml4[512] = {0};
 
 bool g_paging_execute_disable = false;
 
-struct {
-    VirtualAddress current_address;
-
-    uint16_t pdp_index;
-    PageEntry* pdp;
-
-    FreeListEntry* free_list;
-
-    // Holds physical to virtual mapping of page table entries
-    MappingEntry* entry_maps[2];
-} g_kernel_map = {
+AddressSpace g_kernel_map = {
     .current_address = KERNEL_OFFSET,
     .pdp_index = KERNEL_PML4_OFFSET,
     .pdp = 0,
+    .prot = 0,
     .free_list = 0,
     .entry_maps = {0},
 };
