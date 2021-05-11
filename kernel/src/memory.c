@@ -11,27 +11,27 @@ void* alloc_pages(uint64_t pages, PagingFlags paging_flags) {
     PageFrameAllocation* allocation = alloc_frames(pages);
     if (allocation == 0) return 0;
 
-    void* ptr = (void*)map_allocation(allocation, paging_flags);
+    void* ptr = (void*)kmap_allocation(allocation, paging_flags);
 
     free_frame_allocation_entries(allocation);
     return ptr;
 }
 
-void free_pages(void* ptr, uint64_t pages) { unmap_and_free_frames((VirtualAddress)ptr, pages); }
+void free_pages(void* ptr, uint64_t pages) { kunmap_and_free_frames((VirtualAddress)ptr, pages); }
 
 void* alloc_pages_contiguous(uint64_t pages, PagingFlags paging_flags) {
     PhysicalAddress phys_addr;
     if (!alloc_frames_contiguos(pages, &phys_addr)) return 0;
 
-    return (void*)map_range(phys_addr, pages, paging_flags);
+    return (void*)kmap_phys_range(phys_addr, pages, paging_flags);
 }
 
 void free_pages_contiguous(void* ptr, uint64_t pages) {
     PhysicalAddress phys_addr;
-    const bool success = get_physical_address((VirtualAddress)ptr, &phys_addr);
+    const bool success = kvirt_to_phys_addr((VirtualAddress)ptr, &phys_addr);
     KERNEL_ASSERT(success, "Physical address does not exist");
 
-    unmap((VirtualAddress)ptr, pages);
+    kunmap_range((VirtualAddress)ptr, pages);
     free_frames_contiguos(phys_addr, pages);
 }
 

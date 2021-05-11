@@ -152,7 +152,7 @@ void setup_apic() {
                     ioapic->physical_address = (PhysicalAddress)entry->ioapic_address;
 
                     // Page each IOAPIC
-                    ioapic->virtual_address = (void*)map_range(
+                    ioapic->virtual_address = (void*)kmap_phys_range(
                         ioapic->physical_address, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
 
                     ioapic->used_irqs = 1 + read_ioapic_mre(ioapic->virtual_address);
@@ -209,8 +209,8 @@ void setup_apic() {
         }
 
         // Page Local APIC
-        g_lapic =
-            (LocalAPIC*)map_range(local_apic_phys_addr, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+        g_lapic = (LocalAPIC*)kmap_phys_range(
+            local_apic_phys_addr, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
 
         // Set bit 8 of the Spurious Vector Register to enable the xAPIC
         // Using 0xFF as the Spurious Vector because osdev said so

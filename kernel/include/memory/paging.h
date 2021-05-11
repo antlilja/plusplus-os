@@ -58,20 +58,32 @@ typedef struct {
 } AddressSpace;
 
 // Maps discrete allocations into contiguos virtual address space
-VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags);
+VirtualAddress map_allocation(AddressSpace* space, PageFrameAllocation* allocation,
+                              PagingFlags flags);
 
-// Maps the physical address range to available virtual address space
-VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags flags);
+// Maps the physical address range to available virtual address range
+VirtualAddress map_phys_range(AddressSpace* space, PhysicalAddress phys_addr, uint64_t pages,
+                              PagingFlags flags);
 
-// Unmaps virtual address space
-void unmap(VirtualAddress virt_addr, uint64_t pages);
+// Unmaps virtual address range
+void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages);
 
 // Unmaps virtual address range and frees previously mapped frames
-void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages);
+void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages);
 
 // Translates a virtual address into the corresponding physical address
 // Returns false if the virtual address isn't mapped
-bool get_physical_address(VirtualAddress virt_addr, PhysicalAddress* phys_addr);
+bool virt_to_phys_addr(AddressSpace* space, VirtualAddress virt_addr, PhysicalAddress* phys_addr);
+
+VirtualAddress kmap_allocation(PageFrameAllocation* allocation, PagingFlags flags);
+
+VirtualAddress kmap_phys_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags flags);
+
+void kunmap_range(VirtualAddress virt_addr, uint64_t pages);
+
+void kunmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages);
+
+bool kvirt_to_phys_addr(VirtualAddress virt_addr, PhysicalAddress* phys_addr);
 
 void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map);
 

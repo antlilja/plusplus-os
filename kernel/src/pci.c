@@ -68,19 +68,19 @@ void enumerate_pci_devices() {
                     PhysicalAddress config_phys_addr =
                         base_phys_addr + ((bus << 20) | (device << 15) | (func << 12));
 
-                    const PCIConfigSpace0* config_space = (const PCIConfigSpace0*)map_range(
+                    const PCIConfigSpace0* config_space = (const PCIConfigSpace0*)kmap_phys_range(
                         config_phys_addr, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
 
                     const bool exists = config_space->vendor_id != 0xffff;
                     const bool is_multi_func = (config_space->header_type & 0x80) != 0;
 
                     if (func > 0 && !is_multi_func) {
-                        unmap((VirtualAddress)config_space, 1);
+                        kunmap_range((VirtualAddress)config_space, 1);
                         break;
                     }
 
                     if (!exists) {
-                        unmap((VirtualAddress)config_space, 1);
+                        kunmap_range((VirtualAddress)config_space, 1);
                         continue;
                     }
 

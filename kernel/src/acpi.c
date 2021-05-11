@@ -85,7 +85,7 @@ void prepare_acpi_memory(void* uefi_memory_map) {
         UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];
         if (desc->type != EfiACPIMemoryNVS && desc->type != EfiACPIReclaimMemory) continue;
 
-        const VirtualAddress virt = map_range(desc->physical_start, desc->num_pages, 0);
+        const VirtualAddress virt = kmap_phys_range(desc->physical_start, desc->num_pages, 0);
         ACPIMemRemap* entry = &g_remap_list[g_remap_count++];
 
         entry->phys = desc->physical_start;
