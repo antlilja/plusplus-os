@@ -11,6 +11,37 @@
 
 typedef uint32_t PagingFlags;
 
+typedef union {
+    struct {
+        bool present : 1;
+        bool write : 1;
+        bool user : 1;
+        bool write_through : 1;
+        bool cache_disable : 1;
+        bool accessed : 1;
+        bool dirty : 1;
+        bool large : 1;
+        bool global : 1;
+        uint8_t ignored0 : 3;
+        PhysicalAddress phys_addr : 40;
+        uint8_t ignored1 : 7;
+        uint8_t prot : 4;
+        bool execute_disable : 1;
+    } __attribute__((packed));
+    uint64_t value;
+} PageEntry;
+
+typedef struct {
+    VirtualAddress next : 48;
+    VirtualAddress addr : 36;
+    uint64_t pages : 44;
+} __attribute__((packed)) FreeListEntry;
+
+typedef struct {
+    VirtualAddress next : 48;
+    VirtualAddress virt_addr : 36;
+    PhysicalAddress phys_addr : 38;
+} __attribute__((packed)) MappingEntry;
 // Maps discrete allocations into contiguos virtual address space
 VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags);
 
