@@ -64,6 +64,84 @@ extern char s_kernel_rodata_end;
 extern char s_kernel_data_start;
 extern char s_kernel_data_end;
 
+void new_address_space(AddressSpace* space, uint16_t pdp_index, uint8_t prot) {
+    KERNEL_ASSERT(pdp_index < KERNEL_PML4_OFFSET,
+                  "AddressSpace can't overlap with kernel address space")
+
+    KERNEL_ASSERT(prot <= 0b1111, "Prot is only 4 bits page entries")
+
+    space->pdp_index = pdp_index;
+    space->current_address = pdp_index * PDP_MEM_RANGE;
+
+    // Make sure virtual address zero is never used
+    if (space->current_address == 0) space->current_address += PAGE_SIZE;
+
+    // Allocate PDP
+    space->pdp = (PageEntry*)alloc_pages_contiguous(1, PAGING_WRITABLE);
+    KERNEL_ASSERT(space->pdp != 0, "Out of memory")
+}
+
+void delete_address_space(AddressSpace* space) {
+    // Free free list entries
+    {
+        FreeListEntry* free_entry = space->free_list;
+        while (free_entry != 0) {
+            MemoryEntry* mem_entry = (MemoryEntry*)free_entry;
+            free_entry = (FreeListEntry*)SIGN_EXT_ADDR(free_entry->next);
+            free_memory_entry(mem_entry);
+        }
+    }
+
+    // Free page entries and mapping entries
+    {
+        for (uint8_t i = 0; i < 2; ++i) {
+            MappingEntry* map_entry = space->entry_maps[i];
+            while (map_entry != 0) {
+                // Free page entry memory
+                free_pages_contiguous((void*)SIGN_EXT_ADDR(map_entry->virt_addr << 12), 1);
+
+                // Free memory entry
+                MemoryEntry* mem_entry = (MemoryEntry*)map_entry;
+                map_entry = (MappingEntry*)SIGN_EXT_ADDR(map_entry->next);
+                free_memory_entry(mem_entry);
+            }
+        }
+    }
+
+    // Free PDP
+    free_pages_contiguous(space->pdp, 1);
+}
+
+void map_address_space(AddressSpace* space) {
+    {
+        PhysicalAddress pdp_phys_addr;
+        const bool success = kvirt_to_phys_addr((VirtualAddress)space->pdp, &pdp_phys_addr);
+        KERNEL_ASSERT(success, "Could not find physical address")
+        g_pml4[space->pdp_index].phys_addr = pdp_phys_addr >> 12;
+    }
+
+    g_pml4[space->pdp_index].present = true;
+    g_pml4[space->pdp_index].write = true;
+
+    // Invalidate TLB entries
+    for (VirtualAddress virt_addr = space->pdp_index * PDP_MEM_RANGE;
+         virt_addr < space->current_address;
+         virt_addr += PAGE_SIZE) {
+        asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
+    }
+}
+
+void unmap_address_space(AddressSpace* space) {
+    g_pml4[space->pdp_index].value = 0;
+
+    // Invalidate TLB entries
+    for (VirtualAddress virt_addr = space->pdp_index * PDP_MEM_RANGE;
+         virt_addr < space->current_address;
+         virt_addr += PAGE_SIZE) {
+        asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
+    }
+}
+
 PageEntry* get_page_entries(AddressSpace* space, const PageEntry* entry, uint8_t level) {
     PhysicalAddress phys_addr = entry->phys_addr;
     MappingEntry* mapping = space->entry_maps[level];

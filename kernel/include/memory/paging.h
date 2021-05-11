@@ -57,6 +57,18 @@ typedef struct {
     MappingEntry* entry_maps[2];
 } AddressSpace;
 
+// Fills in the AddressSpace struct, checks for sane values and allocates memory for PDP
+void new_address_space(AddressSpace* space, uint16_t pdp_index, uint8_t prot);
+
+// Frees page entries, lists and PDP
+void delete_address_space(AddressSpace* space);
+
+// Maps address space
+void map_address_space(AddressSpace* space);
+
+// Unmaps address space
+void unmap_address_space(AddressSpace* space);
+
 // Maps discrete allocations into contiguos virtual address space
 VirtualAddress map_allocation(AddressSpace* space, PageFrameAllocation* allocation,
                               PagingFlags flags);
