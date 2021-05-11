@@ -359,6 +359,34 @@ VirtualAddress map_phys_range(AddressSpace* space, PhysicalAddress phys_addr, ui
     return virt_addr;
 }
 
+bool map_to_range(AddressSpace* space, PhysicalAddress phys_addr, VirtualAddress virt_addr,
+                  uint64_t pages, PagingFlags flags) {
+    if (space->current_address < virt_addr) {
+        // Check if virtual address range would be outside of the PDP range
+        if (virt_addr + (pages * PAGE_SIZE) > (space->pdp_index + 1) * PDP_MEM_RANGE) return false;
+
+        FreeListEntry* free_entry = (FreeListEntry*)get_memory_entry();
+        free_entry->addr = space->current_address >> 12;
+        free_entry->pages = (virt_addr - space->current_address) / PAGE_SIZE;
+        free_entry->next = (VirtualAddress)space->free_list;
+        space->free_list = free_entry;
+
+        space->current_address = virt_addr + pages * PAGE_SIZE;
+
+        PageTableLocation location;
+        populate_page_table_location(space, virt_addr, &location, true);
+
+        map_range_helper(space, virt_addr, phys_addr, pages, flags, &location);
+    }
+    else {
+        // TODO(Anton Lilja, 11/05/2021):
+        // Look through free lists to see if address range is available
+        return false;
+    }
+
+    return true;
+}
+
 void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) {
     add_range_to_free_list(space, virt_addr, pages);
 

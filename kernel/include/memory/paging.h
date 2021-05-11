@@ -77,6 +77,11 @@ VirtualAddress map_allocation(AddressSpace* space, PageFrameAllocation* allocati
 VirtualAddress map_phys_range(AddressSpace* space, PhysicalAddress phys_addr, uint64_t pages,
                               PagingFlags flags);
 
+// Maps the physical address range to specified virtual address range if available
+// Returns false if address space isn't available or out of range
+bool map_to_range(AddressSpace* space, PhysicalAddress phys_addr, VirtualAddress virt_addr,
+                  uint64_t pages, PagingFlags flags);
+
 // Unmaps virtual address range
 void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages);
 
