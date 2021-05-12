@@ -20,7 +20,7 @@ struct {
     GDTEntry user_data;
     GDTEntry tss_low;
     GDTEntry tss_high;
-} __attribute__((packed)) g_gdt = {
+} __attribute__((packed)) __attribute__((aligned(8))) g_gdt = {
     // https://wiki.osdev.org/Global_Descriptor_Table
     // Null segments are required
     .null = {0, 0, 0, 0, 0, 0},
@@ -46,7 +46,7 @@ struct {
     uint8_t reserved2[10];
     // IO bitmap
     uint16_t iopb_offset;
-} __attribute__((packed)) g_tss = {0};
+} __attribute__((packed)) __attribute__((aligned(8))) g_tss = {0};
 
 __attribute__((naked)) void set_gdt_and_tss(void* __attribute__((unused)) gdt) {
     // Translate C defines into assembly "defines"
