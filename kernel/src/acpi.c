@@ -73,22 +73,12 @@ void prepare_acpi_memory(void* uefi_memory_map) {
         entry_count += 1;
     }
 
-    { // allocate and page remap entries
+    g_remap_list = ({
+        const uint64_t pages = ((entry_count * sizeof(ACPIMemRemap)) + PAGE_SIZE - 1) / PAGE_SIZE;
 
-        // Round up needed pages to store remap entries
-        uint64_t needed_pages = 1 + (entry_count * sizeof(ACPIMemRemap)) / PAGE_SIZE;
-
-        PageFrameAllocation* alloc = alloc_frames(needed_pages);
-        g_remap_list = (ACPIMemRemap*)map_allocation(alloc, PAGING_WRITABLE);
-
-        // dealloc pool entry
-        while (alloc != 0) {
-            void* next = alloc->next;
-            free_memory_entry((MemoryEntry*)alloc);
-
-            alloc = next;
-        }
-    }
+        (ACPIMemRemap*)alloc_pages(pages, PAGING_WRITABLE);
+    });
+    KERNEL_ASSERT(g_remap_list != 0, "Out of memory")
 
     // Store remap info
     for (uint64_t i = 0; i < memory_map->buffer_size; i += memory_map->desc_size) {

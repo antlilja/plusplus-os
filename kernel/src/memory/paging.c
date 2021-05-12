@@ -67,6 +67,8 @@ typedef MappingEntry PagePoolEntry;
 PageEntry __attribute__((aligned(0x1000))) g_pml4[512] = {0};
 PageEntry __attribute__((aligned(0x1000))) g_kernel_pdp[512] = {0};
 
+bool g_paging_execute_disable = false;
+
 struct {
     VirtualAddress current_address;
     FreeListEntry* free_list;
@@ -126,7 +128,7 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
 
             while (allocation != 0) {
                 // Add page to page entry mapping list
-                uint64_t size = get_order_block_size(allocation->order);
+                uint64_t size = get_frame_order_size(allocation->order);
                 PhysicalAddress phys_addr = allocation->addr;
                 while (size != 0) {
                     MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
@@ -150,8 +152,6 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
         g_page_pool.head = (PagePoolEntry*)SIGN_EXT_ADDR(pool_entry->next);
         --g_page_pool.count;
 
-        // TODO(Anton Lilja, 01/05/2021):
-        // Disable execute privileges if functionality is available
         entry->phys_addr = pool_entry->phys_addr;
         entry->present = true;
         entry->write = true;
@@ -162,6 +162,15 @@ PageEntry* get_or_alloc_page_entries(PageEntry* entry) {
 
         return entries;
     }
+}
+
+void add_range_to_free_list(VirtualAddress virt_addr, uint64_t pages) {
+    FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
+    entry->addr = virt_addr >> 12;
+    entry->pages = pages;
+
+    entry->next = (VirtualAddress)g_kernel_map.free_list;
+    g_kernel_map.free_list = entry;
 }
 
 VirtualAddress alloc_addr_space(uint64_t pages) {
@@ -239,8 +248,7 @@ void map_range_helper(VirtualAddress virt_addr, PhysicalAddress phys_addr, uint6
         pt[index].write = (flags & PAGING_WRITABLE) != 0;
         pt[index].cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
         pt[index].write_through = (flags & PAGING_WRITE_THROUGH) != 0;
-        // TODO (Anton Lilja, 05-05-21):
-        // Disable execute privileges if functionality is available
+        pt[index].execute_disable = ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
 
         // Invalidate TLB entry for page belonging to virtual address
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
@@ -257,7 +265,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     {
         PageFrameAllocation* alloc = allocation;
         while (alloc != 0) {
-            size += get_order_block_size(alloc->order);
+            size += get_frame_order_size(alloc->order);
             alloc = alloc->next;
         }
     }
@@ -272,7 +280,7 @@ VirtualAddress map_allocation(PageFrameAllocation* allocation, PagingFlags flags
     PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
 
     while (allocation != 0) {
-        uint64_t allocation_size = get_order_block_size(allocation->order);
+        uint64_t allocation_size = get_frame_order_size(allocation->order);
         uint64_t pages = allocation_size / PAGE_SIZE;
         map_range_helper(
             curr_virt_addr, allocation->addr, pages, flags, &pd_index, &pd, &pt_index, &pt);
@@ -297,21 +305,13 @@ VirtualAddress map_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags 
 }
 
 void unmap(VirtualAddress virt_addr, uint64_t pages) {
-    // Add range to free list
-    {
-        FreeListEntry* entry = (FreeListEntry*)get_memory_entry();
-        entry->addr = virt_addr >> 12;
-        entry->pages = pages;
-
-        entry->next = (VirtualAddress)g_kernel_map.free_list;
-        g_kernel_map.free_list = entry;
-    }
+    add_range_to_free_list(virt_addr, pages);
 
     uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
-    PageEntry* pd = get_or_alloc_page_entries(&g_kernel_pdp[pd_index]);
+    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
 
     uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
-    PageEntry* pt = get_or_alloc_page_entries(&pd[pt_index]);
+    PageEntry* pt = get_page_entries(&pd[pt_index]);
     for (uint64_t i = 0; i < pages; ++i) {
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         pt[index].value = 0;
@@ -321,6 +321,54 @@ void unmap(VirtualAddress virt_addr, uint64_t pages) {
 
         virt_addr += PAGE_SIZE;
         page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+    }
+}
+
+void unmap_and_free_frames(VirtualAddress virt_addr, uint64_t pages) {
+    add_range_to_free_list(virt_addr, pages);
+
+    uint16_t pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
+    PageEntry* pd = get_page_entries(&g_kernel_pdp[pd_index]);
+
+    uint16_t pt_index = GET_LEVEL_INDEX(virt_addr, PD);
+    PageEntry* pt = get_page_entries(&pd[pt_index]);
+
+    PhysicalAddress start_phys_addr;
+    PhysicalAddress curr_phys_addr;
+    PhysicalAddress frame_pages = 0;
+    for (uint64_t i = 0; i < pages; ++i) {
+        const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
+
+        if (frame_pages == 0) {
+            start_phys_addr = curr_phys_addr = (pt[index].phys_addr << 12);
+            frame_pages = 1;
+        }
+        else {
+            curr_phys_addr += PAGE_SIZE;
+
+            if (curr_phys_addr != (pt[index].phys_addr << 12)) {
+                KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1,
+                              "Allocation is not power of 2")
+                free_frames_contiguos(start_phys_addr, frame_pages);
+                frame_pages = 0;
+            }
+            else {
+                ++frame_pages;
+            }
+        }
+
+        pt[index].value = 0;
+
+        // Invalidate TLB entry for page belonging to virtual address
+        asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
+
+        virt_addr += PAGE_SIZE;
+        page_table_traversal_helper(virt_addr, &pd_index, &pd, &pt_index, &pt);
+    }
+
+    if (frame_pages != 0) {
+        KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1, "Allocation is not power of 2")
+        free_frames_contiguos(start_phys_addr, frame_pages);
     }
 }
 
@@ -355,15 +403,17 @@ void free_uefi_memory_and_remove_identity_mapping(void* uefi_memory_map) {
                     while (size != 0) {
                         uint8_t order = 0;
                         for (; order < FRAME_ORDERS; ++order) {
-                            if (get_order_block_size(order) > size ||
-                                phys_addr % get_order_block_size(order) != 0)
-                                break;
+                            const uint64_t order_size = get_frame_order_size(order);
+                            if (order_size > size || (phys_addr % order_size) != 0) break;
                         }
                         --order;
 
-                        free_frames_contiguos(phys_addr, order);
-                        size -= get_order_block_size(order);
-                        phys_addr += get_order_block_size(order);
+                        KERNEL_ASSERT(order < FRAME_ORDERS, "Order does not exist")
+
+                        const uint64_t order_size = get_frame_order_size(order);
+                        free_frames_contiguos(phys_addr, order_size / PAGE_SIZE);
+                        size -= order_size;
+                        phys_addr += order_size;
                     }
                     break;
                 }
@@ -389,6 +439,18 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     _Static_assert(sizeof(PageEntry) == 8, "PageEntry is not 8 bytes");
     _Static_assert(sizeof(FreeListEntry) == 16, "FreeListEntry struct not 16 bytes");
     _Static_assert(sizeof(MappingEntry) == 16, "MappingEntry struct not 16 bytes");
+
+    // Check for NX bit with CPUID
+    {
+        uint32_t edx;
+        asm volatile("mov $0x80000001, %%eax\n"
+                     "cpuid\n"
+                     : "=d"(edx)
+                     :
+                     : "rax", "rbx", "rcx", "memory", "cc");
+
+        g_paging_execute_disable = ((edx >> 20) & 1) != 0;
+    }
 
     struct {
         PhysicalAddress phys_addr;
@@ -419,7 +481,14 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     // Make sure we have room to map PT entries into virtual memory
     while ((pt_count * PT_MEM_RANGE - total_size) < (pt_count + pd_count) * PAGE_SIZE) ++pt_count;
 
-    const uint64_t pages_to_allocate = pd_count + pt_count;
+    const uint64_t pages_to_allocate =
+        pd_count + pt_count + ((starting_pool_size + memory_entries_size) / PAGE_SIZE);
+
+    KERNEL_ASSERT(pages_to_allocate * PAGE_SIZE < get_memory_size(),
+                  "Memory initialization requires more memory than we have")
+
+    KERNEL_ASSERT(pages_to_allocate * PAGE_SIZE < PDP_MEM_RANGE,
+                  "Memory initialization requires more than 512GB")
 
     // Allocate pages required by page table and address allocator
     PhysicalAddress allocated_phys_addr = 0;
@@ -487,17 +556,18 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
         }
     }
 
-#define MAP_PAGE(_virt_addr, _phys_addr, _write)                              \
-    {                                                                         \
-        const uint16_t pd_index = GET_LEVEL_INDEX(_virt_addr, PDP);           \
-        const uint16_t pt_index = GET_LEVEL_INDEX(_virt_addr, PD);            \
-        PageEntry* pd = (PageEntry*)(g_kernel_pdp[pd_index].phys_addr << 12); \
-        PageEntry* pt = (PageEntry*)(pd[pt_index].phys_addr << 12);           \
-                                                                              \
-        const uint16_t index = GET_LEVEL_INDEX(_virt_addr, PT);               \
-        pt[index].phys_addr = _phys_addr;                                     \
-        pt[index].present = true;                                             \
-        pt[index].write = _write;                                             \
+#define MAP_PAGE(_virt_addr, _phys_addr, _write, _executable)                     \
+    {                                                                             \
+        const uint16_t pd_index = GET_LEVEL_INDEX(_virt_addr, PDP);               \
+        const uint16_t pt_index = GET_LEVEL_INDEX(_virt_addr, PD);                \
+        PageEntry* pd = (PageEntry*)(g_kernel_pdp[pd_index].phys_addr << 12);     \
+        PageEntry* pt = (PageEntry*)(pd[pt_index].phys_addr << 12);               \
+                                                                                  \
+        const uint16_t index = GET_LEVEL_INDEX(_virt_addr, PT);                   \
+        pt[index].phys_addr = _phys_addr;                                         \
+        pt[index].present = true;                                                 \
+        pt[index].write = _write;                                                 \
+        pt[index].execute_disable = (!(_executable)) && g_paging_execute_disable; \
     }
 
     // Map kernel into virtual memory
@@ -515,17 +585,13 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
 
             // Make sure the pages only have privileges that they require
             if (is_data_segment) {
-                // TODO (Anton Lilja, 29-04-21):
-                // Disable execute privileges if functionality is available
-                MAP_PAGE(virt_addr, curr_phys_addr >> 12, true)
+                MAP_PAGE(virt_addr, curr_phys_addr >> 12, true, false)
             }
             else if (is_rodata_segment) {
-                // TODO (Anton Lilja, 29-04-21):
-                // Disable execute privileges if functionality is available
-                MAP_PAGE(virt_addr, curr_phys_addr >> 12, false)
+                MAP_PAGE(virt_addr, curr_phys_addr >> 12, false, false)
             }
             else {
-                MAP_PAGE(virt_addr, curr_phys_addr >> 12, true)
+                MAP_PAGE(virt_addr, curr_phys_addr >> 12, true, true)
             }
 
             curr_phys_addr += PAGE_SIZE;
@@ -535,7 +601,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
     // Map memory entries into virtual memory
     const VirtualAddress memory_entries_virt_addr = SIGN_EXT_ADDR(g_kernel_map.current_address);
     for (uint64_t i = 0; i < memory_entries_size / PAGE_SIZE; ++i) {
-        MAP_PAGE(g_kernel_map.current_address, allocated_phys_addr >> 12, true)
+        MAP_PAGE(g_kernel_map.current_address, allocated_phys_addr >> 12, true, false)
         g_kernel_map.current_address += PAGE_SIZE;
         allocated_phys_addr += PAGE_SIZE;
     }
@@ -551,7 +617,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
             const VirtualAddress virt_addr = SIGN_EXT_ADDR(g_kernel_map.current_address);
             g_kernel_map.current_address += PAGE_SIZE;
 
-            MAP_PAGE(virt_addr, allocated_phys_addr >> 12, true)
+            MAP_PAGE(virt_addr, allocated_phys_addr >> 12, true, false)
 
             // Add page to page pool
             {
@@ -584,7 +650,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
         while (curr_phys_addr != frame_allocator.phys_addr + frame_allocator_size) {
             const VirtualAddress virt_addr = SIGN_EXT_ADDR(g_kernel_map.current_address);
             g_kernel_map.current_address += PAGE_SIZE;
-            MAP_PAGE(virt_addr, curr_phys_addr >> 12, true)
+            MAP_PAGE(virt_addr, curr_phys_addr >> 12, true, false)
             curr_phys_addr += PAGE_SIZE;
         }
     }
@@ -598,7 +664,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
                 const VirtualAddress virt_addr = SIGN_EXT_ADDR(g_kernel_map.current_address);
                 g_kernel_map.current_address += PAGE_SIZE;
 
-                MAP_PAGE(virt_addr, g_kernel_pdp[i].phys_addr, true)
+                MAP_PAGE(virt_addr, g_kernel_pdp[i].phys_addr, true, false)
 
                 MappingEntry* entry = (MappingEntry*)get_memory_entry();
                 entry->next = (VirtualAddress)g_page_entry_mapping_list;
@@ -613,7 +679,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
                 const VirtualAddress virt_addr = g_kernel_map.current_address;
                 g_kernel_map.current_address += PAGE_SIZE;
 
-                MAP_PAGE(virt_addr, pd[j].phys_addr, true)
+                MAP_PAGE(virt_addr, pd[j].phys_addr, true, false)
 
                 MappingEntry* entry = (MappingEntry*)get_memory_entry();
                 entry->next = (VirtualAddress)g_page_entry_mapping_list;

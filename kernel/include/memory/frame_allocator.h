@@ -1,5 +1,5 @@
 #pragma once
-#include "memory.h"
+#include "memory/defs.h"
 
 #include <stdbool.h>
 
@@ -19,8 +19,15 @@ void alloc_frame_allocator_memory(void* uefi_memory_map, PhysicalAddress* phys_a
 void initialize_frame_allocator(VirtualAddress virt_addr, uint64_t total_pages,
                                 void* uefi_memory_map, uint64_t entry_pool_pages);
 
-// Get the size of blocks of specified order
-uint64_t get_order_block_size(uint8_t order);
+// Get the size of the specified frame order
+uint64_t get_frame_order_size(uint8_t order);
+
+// Get the min size frame order from number of pages
+// Return FRAME_ORDERS if order doesn't exist
+uint8_t get_min_size_frame_order(uint64_t pages);
+
+// Frees frame allocation list
+void free_frame_allocation_entries(PageFrameAllocation* allocations);
 
 // Allocate page frames (allocation may consist of several non-contiguos blocks)
 // Underlying memory for PageFrameAllocation structs is owned by the allocator
@@ -31,7 +38,7 @@ PageFrameAllocation* alloc_frames(uint64_t pages);
 void free_frames(PageFrameAllocation* allocation);
 
 // Allocate a block of contiguos memory (useful for DMA)
-bool alloc_frames_contiguos(uint8_t order, PhysicalAddress* out_addr);
+bool alloc_frames_contiguos(uint64_t pages, PhysicalAddress* out_addr);
 
 // Free block of contiguos memory
-void free_frames_contiguos(PhysicalAddress addr, uint8_t order);
+void free_frames_contiguos(PhysicalAddress addr, uint64_t pages);
