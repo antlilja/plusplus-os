@@ -21,7 +21,7 @@ typedef struct {
     uint8_t _rsv0 : 3;
     uint8_t c : 1; // 1: Command, 0: Control
 
-    uint8_t command;      // ATA_COMMAND
+    uint8_t cmd;      // ATA_COMMAND
     uint8_t feature_regl; // Feature register, 7:0
 
     uint8_t lba0;       // LBA low register, 7:0

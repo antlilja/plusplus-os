@@ -2,10 +2,10 @@
 #include <stdbool.h>
 
 
-#define PDRT_LEN 8
+#define PRDT_LEN 8
 
 // Pci header struct
-typedef struct {
+typedef volatile struct {
     // Identifiers
     uint16_t device_id;
     uint16_t vendor_id;
@@ -106,9 +106,9 @@ typedef volatile struct {
     uint32_t fis_switch_ctrl;   // 0x40, FIS-based switch control
     uint32_t _rsv1[11];         // 0x44 ~ 0x6F, Reserved
     uint32_t vendor[4];         // 0x70 ~ 0x7F, vendor specific
-} AHCIPort;                     // incrementable
+} __attribute__((packed)) AHCIPort;                     // incrementable
 
-typedef struct {
+typedef volatile struct {
     uint32_t capabilities;        // 0x00, Host capability
     uint32_t global_ctrl;         // 0x04, Global host control
     uint32_t interrupt_status;    // 0x08, Interrupt status
@@ -122,11 +122,11 @@ typedef struct {
     uint32_t bios_handoff;        // 0x28, BIOS/OS handoff control and status
     uint8_t _rsv[0xA0 - 0x2C];    // 0x2C - 0x9F, Reserved
     uint8_t vendor[0x100 - 0xA0]; // 0xA0 - 0xFF, Vendor specific registers
-    AHCIPort port[1]; // 0x100 - 0x10FF, Port control registers // HOW LONG IS THIS LIST?
+    //AHCIPort port[1]; // 0x100 - 0x10FF, Port control registers // HOW LONG IS THIS LIST?
     // I assume we can pass over to ports[1+], but ptr increment will be wack
-} AHCIMemory; // probs: non-incrementable
+} __attribute__((packed)) AHCIMemory; // probs: non-incrementable
 
-typedef struct {
+typedef volatile struct {
     uint8_t cmd_fis_len : 5;  // Command FIS length in DWORDS, 2 ~ 16
     uint8_t atapi : 1;        // ATAPI // We dont need this...
     uint8_t write : 1;        // Write, 1: H2D, 0: D2H
@@ -140,20 +140,20 @@ typedef struct {
     uint32_t prd_byte_count;  // Physical region descriptor byte count transferred
     uint64_t cmd_table_base;  // Command table descriptor base address // 32 or 64?
     uint32_t _rsv[4];         // Reserved
-} CmdHeader;
+} __attribute__((packed)) CmdHeader;
 
-typedef struct {
+typedef volatile struct {
     uint64_t data_base;       // Data base address
     uint32_t rsv0;            // Reserved
     uint32_t byte_count : 22; // Byte count, 4M max
     uint32_t _rsv1 : 9;       // Reserved
     uint32_t interrupt : 1;   // Interrupt on completion
-} PRDTEntry;                  // item in physical region descriptor table (part of cmd table)
+} __attribute__((packed)) PRDTEntry;                  // item in physical region descriptor table (part of cmd table)
 
 typedef struct {
     uint8_t cmd_fis[64];            // Command FIS
     uint8_t atapi_cmd[16];          // ATAPI command, 12 or 16 bytes
     uint8_t _rsv[48];               // Reserved
-    PRDTEntry prdt_entry[PDRT_LEN]; // Physical region descriptor table entries, 0 ~ 65535 // HOW?
-                                    // // IT SEEMS WE SET THIS OURSELVES
-} CmdTable;
+    //PRDTEntry prdt_entry[1]; // Physical region descriptor table entries, 0 ~ 65535 // HOW?
+                                    // // IT SEEMS WE SET THIS OURSELVES // or no?
+} __attribute__((packed)) CmdTable;
