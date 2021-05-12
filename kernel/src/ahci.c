@@ -190,7 +190,7 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vb
     FISRegH2D* cmd_fis = (FISRegH2D*)cmd_table;
     cmd_fis->fis_type = 0x27;
     cmd_fis->c = 1;
-    cmd_fis->cmd = 0x25;
+    cmd_fis->cmd = ATA_COMMAND_READ_DMA_EXT;
 
     cmd_fis->lba0 = (uint8_t)start;
     cmd_fis->lba1 = (uint8_t)(start >> 8);
