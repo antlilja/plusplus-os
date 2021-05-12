@@ -1,6 +1,10 @@
 #include "gdt.h"
 #include <stdint.h>
 
+#include "memory.h"
+
+#define TSS_STACK_PAGES 2
+
 // https://wiki.osdev.org/Global_Descriptor_Table
 typedef struct {
     uint16_t limit_0_15;
@@ -90,8 +94,11 @@ void setup_gdt_and_tss() {
     // Set io bitmap offset to the size of the TSS because we are not using it.
     g_tss.iopb_offset = sizeof(g_tss);
 
-    // TODO (Anton Lilja, 29-03-2021):
-    // Setup TSS properly with an interrupt stack table and privilege level stack pointers.
+    // Allocate privilege level 0 stack
+    g_tss.rsp[0] = (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE);
+
+    // Allocate one entry of the interrupt descriptor table
+    g_tss.interrupt_stack_table[0] = (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE);
 
     // Setup GDT entry for the TSS
     // The address is split up into several fields
