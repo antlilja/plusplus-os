@@ -26,3 +26,5 @@ void setup_idt();
 // Registers interrupt
 void register_interrupt(uint8_t irq, uint8_t type, bool ist, void* handler);
 
+// Unregisters interrupt
+void unregister_interrupt(uint8_t irq);

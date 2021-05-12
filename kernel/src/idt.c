@@ -2,6 +2,7 @@
 #include "gdt.h"
 
 #include <stdint.h>
+#include <string.h>
 
 // https://wiki.osdev.org/Interrupt_Descriptor_Table#IDT_in_IA-32e_Mode_.2864-bit_IDT.29
 typedef struct {
@@ -56,3 +57,5 @@ void set_idt_gate(uint8_t irq, uint8_t type, uint64_t handler_address, uint16_t 
 void register_interrupt(uint8_t irq, uint8_t type, bool ist, void* handler) {
     set_idt_gate(irq, type, (uint64_t)handler, GDT_KERNEL_CODE_SEGMENT, 0, ist ? 1 : 0);
 }
+
+void unregister_interrupt(uint8_t irq) { memset((void*)&g_idt[irq], 0, sizeof(IDTEntry)); }
