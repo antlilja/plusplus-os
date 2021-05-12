@@ -43,8 +43,6 @@ void setup_idt() {
 }
 
 // General way to register an interrupt where you can set all values
-// This is not in the header because it doesn't make sense to specify an
-// IST, segment selector or the privilege level
 void set_idt_gate(uint8_t irq, uint8_t type, uint64_t handler_address, uint16_t segment_selector,
                   uint8_t ist, uint8_t privilege) {
     g_idt[irq].offset_0_15 = handler_address & 0xffff;
@@ -55,10 +53,6 @@ void set_idt_gate(uint8_t irq, uint8_t type, uint64_t handler_address, uint16_t 
     g_idt[irq].offset_32_63 = (handler_address >> 32) & 0xffffffff;
 }
 
-// Convenience function to register interrupts for the kernel without an ist
-// TODO (Anton Lilja, 30-03-2021):
-// This might be a temporary interface to register interrupts,
-// we need the specify ist for certain interrupts where a new stack is needed.
-void register_interrupt(uint8_t irq, uint8_t type, uint64_t handler_address) {
-    set_idt_gate(irq, type, handler_address, GDT_KERNEL_CODE_SEGMENT, 0, 0);
+void register_interrupt(uint8_t irq, uint8_t type, bool ist, void* handler) {
+    set_idt_gate(irq, type, (uint64_t)handler, GDT_KERNEL_CODE_SEGMENT, 0, ist ? 1 : 0);
 }
