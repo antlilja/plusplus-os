@@ -3,6 +3,7 @@
 
 // Commands from https://wiki.osdev.org/ATA_Command_Matrix
 #define ATA_COMMAND_READ_DMA_EXT 0x25
+#define ATA_COMMAND_WRITE_DMA_EXT 0x35
 #define ATA_COMMAND_IDENTIFY 0xEC
 
 #define FIS_TYPE_REG_H2D 0x27   // Register FIS - host to device
