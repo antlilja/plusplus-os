@@ -12,7 +12,7 @@
 #include "util.h"
 #include <stddef.h>
 
-#define CMD_TABLE_SIZE sizeof(CmdTable) + PRDT_LEN * sizeof(PRDTEntry);
+#define CMD_TABLE_SIZE (sizeof(CmdTable) + PRDT_LEN * sizeof(PRDTEntry))
 
 uint8_t g_max_ports;
 uint8_t g_n_ports;
@@ -107,14 +107,9 @@ bool wait_for_done(uint8_t port_no, uint8_t cmd_slot) {
 // Setup functions
 uint8_t* alloc_port_memory(uint8_t max_ports) {
     KERNEL_ASSERT((PRDT_LEN * 16) % 128 == 0, "prdt dose not align properly, use multiples of 8")
-    uint64_t byte_count = (1024 + 256 + 128 + 16 * PRDT_LEN) * max_ports;
-    uint8_t order = 0;
-    while ((1 << order) * 4096 < byte_count) {
-        order++;
-    }
-    PhysicalAddress physical_base;
-    alloc_frames_contiguos(order, &physical_base);
-    return map_range(physical_base, 1 << order, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+    uint64_t byte_count = (1024 + 256 + CMD_TABLE_SIZE * 32) * max_ports;
+    return alloc_pages_contiguous(round_up_to_multiple(byte_count, 4096) / 4096,
+                                  PAGING_WRITABLE | PAGING_CACHE_DISABLE);
 }
 
 bool setup_ports(uint8_t max_ports) {
@@ -149,6 +144,10 @@ bool setup_ahci() {
     g_ahci_device = map_range(abar & 0xFFFFFFF0ULL,
                               round_up_to_multiple(abar_size, PAGE_SIZE) / PAGE_SIZE,
                               PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+    // HBA controller reset (bit 0)
+    g_ahci_device->global_ctrl |= 1;
+    while (g_ahci_device->global_ctrl & 1)
+        ;
     // set global ctrl bit 31
     g_ahci_device->global_ctrl |= 1 << 31;
     // max ports
@@ -205,7 +204,7 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vb
     cmd_fis->counth = (count >> 8) & 0xFF;
 
     bool port_is_free = wait_for_port(port_no);
-    // KERNEL_ASSERT(port_is_free, "Ahci, port is hung!") // PROBLEM 2 : Port seems to be hung !
+    KERNEL_ASSERT(port_is_free, "Ahci, port is hung!") // PROBLEM 2 : Port seems to be hung !
 
     port->cmd_issue |= 1 << cmd_slot;
 
