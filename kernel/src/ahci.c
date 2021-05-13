@@ -187,7 +187,7 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vb
     }
 
     FISRegH2D* cmd_fis = (FISRegH2D*)cmd_table;
-    cmd_fis->fis_type = 0x27;
+    cmd_fis->fis_type = FIS_TYPE_REG_H2D;
     cmd_fis->c = 1;
     cmd_fis->cmd = ATA_COMMAND_READ_DMA_EXT;
 
