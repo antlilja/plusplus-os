@@ -80,6 +80,8 @@ void new_address_space(AddressSpace* space, uint16_t pdp_index, uint8_t prot) {
     // Allocate PDP
     space->pdp = (PageEntry*)alloc_pages_contiguous(1, PAGING_WRITABLE);
     KERNEL_ASSERT(space->pdp != 0, "Out of memory")
+
+    memset((void*)space->pdp, 0, PAGE_SIZE);
 }
 
 void delete_address_space(AddressSpace* space) {
