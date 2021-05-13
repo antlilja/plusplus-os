@@ -194,6 +194,8 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
             entry->present = true;
             entry->write = true;
 
+            memset((void*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12), 0, PAGE_SIZE);
+
             PageEntry* entries = (PageEntry*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12);
             return entries;
         }
@@ -207,6 +209,7 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
             entry->write = true;
 
             const VirtualAddress virt_addr = kmap_phys_range(phys_addr, 1, PAGING_WRITABLE);
+            memset((void*)virt_addr, 0, PAGE_SIZE);
 
             MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
             mapping_entry->virt_addr = virt_addr >> 12;
