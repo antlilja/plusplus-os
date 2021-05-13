@@ -204,7 +204,15 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
             entry->present = true;
             entry->write = true;
 
-            return (PageEntry*)SIGN_EXT_ADDR(kmap_phys_range(phys_addr, 1, PAGING_WRITABLE));
+            const VirtualAddress virt_addr = kmap_phys_range(phys_addr, 1, PAGING_WRITABLE);
+
+            MappingEntry* mapping_entry = (MappingEntry*)get_memory_entry();
+            mapping_entry->virt_addr = virt_addr >> 12;
+            mapping_entry->phys_addr = phys_addr >> 12;
+            mapping_entry->next = (VirtualAddress)space->entry_maps[level];
+            space->entry_maps[level] = mapping_entry;
+
+            return (PageEntry*)virt_addr;
         }
     }
 }
