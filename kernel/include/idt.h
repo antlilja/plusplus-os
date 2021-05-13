@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 
 #define INTERRUPT_GATE 14
 #define TRAP_GATE 15
@@ -22,5 +23,8 @@ typedef struct {
 
 void setup_idt();
 
-void register_interrupt(uint8_t irq, uint8_t type, uint64_t handler_address);
+// Registers interrupt
+void register_interrupt(uint8_t irq, uint8_t type, bool ist, void* handler);
 
+// Unregisters interrupt
+void unregister_interrupt(uint8_t irq);
