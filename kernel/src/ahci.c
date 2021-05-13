@@ -157,14 +157,29 @@ bool setup_ahci() {
     return true;
 }
 
-int8_t free_cmd_slot(uint8_t port_no) { return 0; } // placeholder, duh!
+int8_t free_cmd_slot(uint8_t port_no) {
+    AHCIPort* port = get_port(port_no);
+
+    uint32_t slots = (port->sata_active | port->cmd_issue);
+    for (uint8_t cmd_slot = 0; cmd_slot < 32; cmd_slot++) {
+        if ((slots & 1) == 0) {
+            return cmd_slot;
+        }
+        slots >>= 1;
+    }
+
+    return -1;
+}
 
 bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vbuffer) {
     PhysicalAddress buffer;
     bool flag = get_physical_address(vbuffer, &buffer);
     KERNEL_ASSERT(flag, "Ahci could not get physical adress for buffer.")
     AHCIPort* port = get_port(port_no);
-    uint8_t cmd_slot = free_cmd_slot(port);
+
+    int8_t cmd_slot = free_cmd_slot(port_no);
+    KERNEL_ASSERT(cmd_slot != -1, "No free cmd_slot could be found.");
+    // TODO Retry x amount of times before failing.
 
     CmdHeader* cmd_header = get_cmd_header(port_no, cmd_slot);
     cmd_header->cmd_fis_len = sizeof(FISRegH2D) / 4; // len in dwords
