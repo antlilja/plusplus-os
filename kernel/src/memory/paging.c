@@ -69,6 +69,7 @@ void new_address_space(AddressSpace* space, uint16_t pdp_index, uint8_t prot) {
                   "AddressSpace can't overlap with kernel address space")
 
     KERNEL_ASSERT(prot <= 0b1111, "Prot is only 4 bits page entries")
+    space->prot = prot;
 
     space->pdp_index = pdp_index;
     space->current_address = pdp_index * PDP_MEM_RANGE;
