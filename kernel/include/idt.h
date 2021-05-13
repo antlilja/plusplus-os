@@ -21,6 +21,15 @@ typedef struct {
     uint64_t ss;
 } __attribute__((packed)) InterruptFrame;
 
+typedef struct {
+    uint64_t err;
+    uint64_t rip;
+    uint64_t cs;
+    uint64_t flags;
+    uint64_t rsp;
+    uint64_t ss;
+} __attribute__((packed)) ErrorCodeInterruptFrame;
+
 void setup_idt();
 
 // Registers interrupt
