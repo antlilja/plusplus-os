@@ -50,7 +50,7 @@ void set_idt_gate(uint8_t irq, uint8_t type, uint64_t handler_address, uint16_t 
 }
 
 void register_interrupt(uint8_t irq, uint8_t type, bool ist, void* handler) {
-    set_idt_gate(irq, type, (uint64_t)handler, GDT_KERNEL_CODE_SEGMENT, 0, ist ? 1 : 0);
+    set_idt_gate(irq, type, (uint64_t)handler, GDT_KERNEL_CODE_SEGMENT, ist ? 1 : 0, 0);
 }
 
 void unregister_interrupt(uint8_t irq) { memset((void*)&g_idt[irq], 0, sizeof(IDTEntry)); }
