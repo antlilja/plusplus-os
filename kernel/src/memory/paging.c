@@ -125,6 +125,8 @@ void map_address_space(AddressSpace* space) {
 
     g_pml4[space->pdp_index].present = true;
     g_pml4[space->pdp_index].write = true;
+    g_pml4[space->pdp_index].prot = space->prot;
+    g_pml4[space->pdp_index].user = space->prot == 3;
 
     // Invalidate TLB entries
     for (VirtualAddress virt_addr = space->pdp_index * PDP_MEM_RANGE;
@@ -207,6 +209,8 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
             entry->phys_addr = phys_addr >> 12;
             entry->present = true;
             entry->write = true;
+            entry->prot = space->prot;
+            entry->user = space->prot == 3;
 
             const VirtualAddress virt_addr = kmap_phys_range(phys_addr, 1, PAGING_WRITABLE);
             memset((void*)virt_addr, 0, PAGE_SIZE);
