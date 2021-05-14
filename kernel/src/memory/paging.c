@@ -323,6 +323,7 @@ void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAdd
             ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
 
         location->pt[index].prot = space->prot;
+        location->pt[index].user = space->prot == 3;
 
         // Invalidate TLB entry for page belonging to virtual address
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
