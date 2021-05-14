@@ -22,16 +22,11 @@ IDTEntry __attribute__((aligned(8))) g_idt[256] = {0};
 void setup_idt() {
     struct {
         uint16_t size;
-        uint64_t base;
-    } __attribute__((packed)) idt;
-
-    // TODO(Anton Lilja, 10-04-21):
-    // We have to do manual assignment here because the compiler might try to optimize in virtual
-    // address pointers at compile time otherwise.
-    // Find way to disable this optimization or
-    // make sure to map kernel correctly before any of this code.
-    idt.size = sizeof(g_idt) - 1;
-    idt.base = (uint64_t)&g_idt;
+        void* base;
+    } __attribute__((packed)) idt = {
+        .size = sizeof(g_idt) - 1,
+        .base = (void*)&g_idt,
+    };
 
     asm(
         // Set IDT

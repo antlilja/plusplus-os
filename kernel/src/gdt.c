@@ -114,12 +114,10 @@ void setup_gdt_and_tss() {
     struct {
         uint16_t size;
         void* base;
-    } __attribute__((packed)) gdt;
-
-    // NOTE (Anton Lilja, 12/05/2021):
-    // For some reason we can't assign directly to the struct, it refuses to load the GDT if we do.
-    gdt.size = sizeof(g_gdt) - 1;
-    gdt.base = (void*)&g_gdt;
+    } __attribute__((packed)) gdt = {
+        .size = sizeof(g_gdt) - 1,
+        .base = (void*)&g_gdt,
+    };
 
     set_gdt_and_tss((void*)&gdt);
 }
