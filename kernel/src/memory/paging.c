@@ -443,7 +443,8 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
         else {
             curr_phys_addr += PAGE_SIZE;
 
-            if (curr_phys_addr != (location.pt[index].phys_addr << 12)) {
+            if (curr_phys_addr != (location.pt[index].phys_addr << 12) ||
+                frame_pages * PAGE_SIZE >= get_frame_order_size(FRAME_ORDERS - 1)) {
                 KERNEL_ASSERT(__builtin_popcountll(frame_pages) == 1,
                               "Allocation is not power of 2")
                 free_frames_contiguos(start_phys_addr, frame_pages);
