@@ -20,8 +20,8 @@ struct {
     GDTEntry kernel_code;
     GDTEntry kernel_data;
     GDTEntry null2;
-    GDTEntry user_code;
     GDTEntry user_data;
+    GDTEntry user_code;
     GDTEntry tss_low;
     GDTEntry tss_high;
 } __attribute__((packed)) __attribute__((aligned(8))) g_gdt = {
@@ -95,10 +95,12 @@ void setup_gdt_and_tss() {
     g_tss.iopb_offset = sizeof(g_tss);
 
     // Allocate privilege level 0 stack
-    g_tss.rsp[0] = (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE);
+    g_tss.rsp[0] =
+        (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE) + TSS_STACK_PAGES * PAGE_SIZE;
 
     // Allocate one entry of the interrupt descriptor table
-    g_tss.interrupt_stack_table[0] = (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE);
+    g_tss.interrupt_stack_table[0] =
+        (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE) + TSS_STACK_PAGES * PAGE_SIZE;
 
     // Setup GDT entry for the TSS
     // The address is split up into several fields
