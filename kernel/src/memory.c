@@ -61,4 +61,6 @@ void initialize_memory(void* uefi_memory_map, PhysicalAddress* kernel_phys_addr,
     // * Initializes the paging system
     // * Initializes the frame allocator
     *kernel_virt_addr = initialize_paging(uefi_memory_map, *kernel_phys_addr, kernel_size);
+
+    initialize_slab_allocator();
 }
