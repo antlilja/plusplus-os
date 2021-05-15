@@ -7,6 +7,7 @@
 #include "pci.h"
 #include "apic.h"
 #include "exceptions.h"
+#include "syscalls.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -91,6 +92,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
 
     setup_apic();
     put_string("APIC(s) set up and usable", 10, 19);
+
+    prepare_syscalls();
+    put_string("Syscalls enabled", 10, 20);
 
     // This function can't return
     while (1)
