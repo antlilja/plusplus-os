@@ -20,8 +20,8 @@ struct {
     GDTEntry kernel_code;
     GDTEntry kernel_data;
     GDTEntry null2;
-    GDTEntry user_code;
     GDTEntry user_data;
+    GDTEntry user_code;
     GDTEntry tss_low;
     GDTEntry tss_high;
 } __attribute__((packed)) __attribute__((aligned(8))) g_gdt = {
