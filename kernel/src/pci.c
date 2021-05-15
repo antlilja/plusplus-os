@@ -2,8 +2,8 @@
 
 #include "kassert.h"
 #include "acpi.h"
+#include "memory.h"
 #include "memory/paging.h"
-#include "memory/entry_pool.h"
 
 #include <string.h>
 
@@ -21,8 +21,8 @@ typedef struct {
 } __attribute__((packed)) MCFGEntry;
 
 typedef struct {
-    VirtualAddress next : 48;
-    VirtualAddress config_space : 36;
+    void* next;
+    PCIConfigSpace0* config_space;
     union {
         struct {
             uint8_t revision_ID;
@@ -32,7 +32,6 @@ typedef struct {
         } __attribute__((packed));
         uint32_t type;
     };
-    uint8_t padding;
 } __attribute__((packed)) PCIDeviceEntry;
 
 PCIDeviceEntry* g_pci_device_list = 0;
@@ -40,18 +39,15 @@ PCIDeviceEntry* g_pci_device_list = 0;
 PCIConfigSpace0* get_pci_device(uint32_t type, uint32_t mask) {
     PCIDeviceEntry* device_entry = g_pci_device_list;
     while (device_entry != 0) {
-        if ((device_entry->type & mask) == type)
-            return (PCIConfigSpace0*)SIGN_EXT_ADDR(device_entry->config_space << 12);
+        if ((device_entry->type & mask) == type) return device_entry->config_space;
 
-        device_entry = (PCIDeviceEntry*)SIGN_EXT_ADDR(device_entry->next);
+        device_entry = (PCIDeviceEntry*)device_entry->next;
     }
 
     return 0;
 }
 
 void enumerate_pci_devices() {
-    _Static_assert(sizeof(PCIDeviceEntry) == 16, "PCIDeviceEntry not 16 bytes");
-
     const MCFG* mcfg = (const MCFG*)find_table("MCFG");
     KERNEL_ASSERT(mcfg, "MCFG TABLE NOT FOUND");
 
@@ -68,7 +64,7 @@ void enumerate_pci_devices() {
                     PhysicalAddress config_phys_addr =
                         base_phys_addr + ((bus << 20) | (device << 15) | (func << 12));
 
-                    const PCIConfigSpace0* config_space = (const PCIConfigSpace0*)kmap_phys_range(
+                    PCIConfigSpace0* config_space = (PCIConfigSpace0*)kmap_phys_range(
                         config_phys_addr, 1, PAGING_WRITABLE | PAGING_CACHE_DISABLE);
 
                     const bool exists = config_space->vendor_id != 0xffff;
@@ -84,14 +80,14 @@ void enumerate_pci_devices() {
                         continue;
                     }
 
-                    PCIDeviceEntry* device_entry = (PCIDeviceEntry*)get_memory_entry();
+                    PCIDeviceEntry* device_entry = kalloc(sizeof(PCIDeviceEntry));
                     device_entry->revision_ID = config_space->revision_ID;
                     device_entry->prog_IF = config_space->prog_IF;
                     device_entry->subclass = config_space->subclass;
                     device_entry->class_code = config_space->class_code;
-                    device_entry->config_space = ((VirtualAddress)config_space) >> 12;
+                    device_entry->config_space = config_space;
 
-                    device_entry->next = (VirtualAddress)g_pci_device_list;
+                    device_entry->next = (void*)g_pci_device_list;
                     g_pci_device_list = device_entry;
                 }
             }
