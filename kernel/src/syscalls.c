@@ -57,7 +57,7 @@ void prepare_syscalls() {
         // Bits 32-47 contain kernel code segment,
         // While bits 48-63 contains user base segment,
         // Where code = base + 0x10 and data = base + 0x8
-        uint32_t star_high = GDT_KERNEL_CODE_SEGMENT | ((GDT_USER_CODE_SEGMENT - 0x10) >> 16);
+        uint32_t star_high = GDT_KERNEL_CODE_SEGMENT | (((GDT_USER_CODE_SEGMENT | 3) - 0x10) << 16);
 
         asm volatile(
             // Set bit 1 (system calls) in EFER MSR (0xC0000080)
