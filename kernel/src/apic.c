@@ -215,6 +215,8 @@ void setup_apic() {
         // Set bit 8 of the Spurious Vector Register to enable the xAPIC
         // Using 0xFF as the Spurious Vector because osdev said so
         g_lapic->spurious_interrupt_vector = 0xFF | (1U << 8);
+
+        g_lapic->task_priority &= (~(0xff));
     }
 }
 
