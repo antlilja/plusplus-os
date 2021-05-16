@@ -1,6 +1,7 @@
 #pragma once
 #include "memory/defs.h"
 #include "memory/paging.h"
+#include "memory/slab_allocator.h"
 
 // Allocates physically non contiguos pages which are mapped with flags applied
 void* alloc_pages(uint64_t pages, PagingFlags paging_flags);

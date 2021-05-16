@@ -19,6 +19,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/paging.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/frame_allocator.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/entry_pool.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/memory/slab_allocator.c
 
   # Libc kernel sources
   ${PROJECT_SOURCE_DIR}/libc/src/string/memcpy.c
