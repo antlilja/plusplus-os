@@ -380,7 +380,7 @@ VirtualAddress map_phys_range(AddressSpace* space, PhysicalAddress phys_addr, ui
 
 bool map_to_range(AddressSpace* space, PhysicalAddress phys_addr, VirtualAddress virt_addr,
                   uint64_t pages, PagingFlags flags) {
-    if (space->current_address < virt_addr) {
+    if (space->current_address <= virt_addr) {
         // Check if virtual address range would be outside of the PDP range
         if (virt_addr + (pages * PAGE_SIZE) > (space->pdp_index + 1) * PDP_MEM_RANGE) return false;
 
