@@ -53,41 +53,36 @@ struct {
 } __attribute__((packed)) __attribute__((aligned(8))) g_tss = {0};
 
 __attribute__((naked)) void set_gdt_and_tss(void* __attribute__((unused)) gdt) {
-    // Translate C defines into assembly "defines"
-#define STR(x) #x
-#define XSTR(s) STR(s)
-    asm(".equ KERNEL_CODE_SEGMENT, " XSTR(GDT_KERNEL_CODE_SEGMENT) "\n");
-    asm(".equ KERNEL_DATA_SEGMENT, " XSTR(GDT_KERNEL_DATA_SEGMENT) "\n");
-    asm(".equ TSS_SEGMENT, " XSTR(GDT_TSS_SEGMENT) "\n");
-#undef XSTR
-#undef STR
-
-    asm(
+    asm volatile(
         // Disable interrupts before setting GDT and TSS
         "cli\n"
 
         // Set pointer to GDT
-        "lgdt (%rdi)\n"
+        "lgdt (%%rdi)\n"
 
         // Setup offset to TSS
-        "mov $TSS_SEGMENT, %ax\n"
-        "ltr %ax\n"
+        "mov %[tss_segment], %%ax\n"
+        "ltr %%ax\n"
 
         // Set all segment registers to the kernel data segment
-        "mov $KERNEL_DATA_SEGMENT, %ax\n"
-        "mov %ax, %ds\n"
-        "mov %ax, %es\n"
-        "mov %ax, %fs\n"
-        "mov %ax, %gs\n"
-        "mov %ax, %ss\n"
+        "mov %[kernel_data_segment], %%ax\n"
+        "mov %%ax, %%ds\n"
+        "mov %%ax, %%es\n"
+        "mov %%ax, %%fs\n"
+        "mov %%ax, %%gs\n"
+        "mov %%ax, %%ss\n"
 
         // Push code segment onto stack before return address to use far return
         // this sets the code segment register (cs)
-        "pop %rdi\n"
-        "mov $KERNEL_CODE_SEGMENT, %rax\n"
-        "push %rax\n"
-        "push %rdi\n"
-        "lretq\n");
+        "pop %%rdi\n"
+        "mov %[kernel_code_segment], %%rax\n"
+        "push %%rax\n"
+        "push %%rdi\n"
+        "lretq\n"
+        :
+        : [kernel_code_segment] "i"(GDT_KERNEL_CODE_SEGMENT),
+          [kernel_data_segment] "i"(GDT_KERNEL_DATA_SEGMENT),
+          [tss_segment] "i"(GDT_TSS_SEGMENT));
 }
 
 void setup_gdt_and_tss() {
