@@ -7,4 +7,6 @@
 
 #define GDT_TSS_SEGMENT 0x30
 
+void set_tss_kernel_stack(void* stack_ptr);
+
 void setup_gdt_and_tss();

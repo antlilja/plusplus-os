@@ -85,13 +85,11 @@ __attribute__((naked)) void set_gdt_and_tss(void* __attribute__((unused)) gdt) {
           [tss_segment] "i"(GDT_TSS_SEGMENT));
 }
 
+void set_tss_kernel_stack(void* stack_ptr) { g_tss.rsp[0] = stack_ptr; }
+
 void setup_gdt_and_tss() {
     // Set io bitmap offset to the size of the TSS because we are not using it.
     g_tss.iopb_offset = sizeof(g_tss);
-
-    // Allocate privilege level 0 stack
-    g_tss.rsp[0] =
-        (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE) + TSS_STACK_PAGES * PAGE_SIZE;
 
     // Allocate one entry of the interrupt descriptor table
     g_tss.interrupt_stack_table[0] =
