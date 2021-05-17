@@ -88,6 +88,18 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     setup_apic();
     put_string("APIC(s) set up and usable", 10, 18);
 
+    setup_ahci();
+    put_string("Ahci ok!", 10, 19);
+
+    PhysicalAddress addr;
+    alloc_frames_contiguos(1, &addr);
+    uint8_t* vaddr = map_range(addr, 2, PAGING_CACHE_DISABLE | PAGING_WRITABLE);
+    *vaddr = 0xff;
+    put_hex(addr, 50, 20);
+    put_hex(vaddr, 30, 20);
+    put_hex(*vaddr, 10, 20);
+    put_int(read_to_buffer(0, 0, 17, vaddr), 5, 21);
+    put_hex(*vaddr, 10, 22);
     // This function can't return
     while (1)
         ;
