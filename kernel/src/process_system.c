@@ -1,8 +1,13 @@
 #include "process_system.h"
 
+#include "gdt.h"
 #include "idt.h"
 #include "apic.h"
+#include "kassert.h"
+#include "elf_loader.h"
 #include "memory.h"
+#include "memory/paging.h"
+#include "memory/frame_allocator.h"
 
 #include <string.h>
 
@@ -13,6 +18,11 @@
 #define APIC_TIMER_PERIODIC_MODE (0b1 << 17)
 #define APIC_TIMER_IRQ 32
 #define APIC_TIMER_INITIAL_COUNT 0xffffff
+
+// Stack defines
+#define KERNEL_STACK_SIZE 0x4000
+#define USER_STACK_SIZE 0x8000
+#define USER_STACK_SAVE_SIZE (sizeof(uint64_t) * 20)
 
 // Stores process information
 // All registers except rsp are stored on the user stack when process is not running
@@ -238,6 +248,48 @@ Process* alloc_process_and_addr_space(uint8_t paging_prot) {
     return process;
 }
 
+void start_user_process(const void* elf_data) {
+    KERNEL_ASSERT(g_process_queue.head != 0,
+                  "start_user_process can't be called without previously running process")
+
+    Process* process = alloc_process_and_addr_space(3);
+    map_address_space(process->addr_space);
+
+    void* entry;
+    {
+        const bool success = load_elf_from_buff(process->addr_space, elf_data, &entry);
+        KERNEL_ASSERT(success, "Failed to load terminal ELF file")
+    }
+
+    // Allocate user stack
+    {
+        PageFrameAllocation* allocation = alloc_frames(USER_STACK_SIZE / PAGE_SIZE);
+        process->rsp = (void*)map_allocation(process->addr_space, allocation, PAGING_WRITABLE) +
+                       USER_STACK_SIZE - USER_STACK_SAVE_SIZE;
+        free_frame_allocation_entries(allocation);
+    }
+
+    // Zero out area of user stack that registers will be popped from
+    memset(process->rsp, 0, sizeof(uint64_t) * 20);
+
+    {
+        uint64_t* rspu64 = (uint64_t*)process->rsp;
+
+        void* kernel_stack =
+            alloc_pages(KERNEL_STACK_SIZE / PAGE_SIZE, PAGING_WRITABLE) + KERNEL_STACK_SIZE;
+
+        rspu64[0] = (uint64_t)kernel_stack; // Kernel stack
+        rspu64[19] = (uint64_t)entry;       // rip
+        rspu64[18] = GDT_USER_CODE_SEGMENT; // cs
+        rspu64[17] = 0x202;                 // rflags
+        rspu64[16] = GDT_USER_DATA_SEGMENT; // ss
+    }
+
+    // Put process in queue
+    g_process_queue.tail->next = process;
+    g_process_queue.tail = process;
+}
+
 void initialize_process_system() {
     // Initialize local APIC timer
     register_interrupt(APIC_TIMER_IRQ, INTERRUPT_GATE, false, (void*)&context_switch_handler);
@@ -259,4 +311,43 @@ void initialize_process_system() {
 
     // Unmask timer interrupt
     g_lapic->lvt_timer &= ~APIC_TIMER_MASKED_MASK;
+
+#if 0
+    Process* process = alloc_process_and_addr_space(3);
+    map_address_space(process->addr_space);
+    g_process_queue.head = process;
+
+    void* entry;
+    {
+        const bool success = load_elf_from_buff(process->addr_space, elf_data, &entry);
+        KERNEL_ASSERT(success, "Failed to load terminal ELF file")
+    }
+
+    // Allocate process stack
+    {
+        PageFrameAllocation* allocation = alloc_frames(USER_STACK_SIZE / PAGE_SIZE);
+        process->rsp = (void*)map_allocation(process->addr_space, allocation, PAGING_WRITABLE) +
+                       USER_STACK_SIZE;
+        free_frame_allocation_entries(allocation);
+    }
+
+    // Allocate and set kernel stack
+    {
+        void* kernel_stack =
+            alloc_pages(KERNEL_STACK_SIZE / PAGE_SIZE, PAGING_WRITABLE) + KERNEL_STACK_SIZE;
+
+        set_tss_kernel_stack(kernel_stack);
+    }
+
+    // Start local APIC timer
+    g_lapic->initial_count = 0xffffff;
+
+    // Jump to userspace program
+    asm volatile("mov %0, %%rcx\n"
+                 "mov %1, %%rsp\n"
+                 "mov $0x0202, %%r11\n"
+                 "sysretq\n"
+                 :
+                 : "g"(entry), "g"(process->rsp));
+#endif
 }
