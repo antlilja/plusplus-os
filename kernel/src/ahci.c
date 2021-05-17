@@ -11,6 +11,7 @@
 #include "memory/paging.h"
 #include "util.h"
 #include <stddef.h>
+#include "memory/defs.h"
 
 #define CMD_TABLE_SIZE (sizeof(CmdTable) + PRDT_LEN * sizeof(PRDTEntry))
 
@@ -37,7 +38,7 @@ CmdTable* get_cmd_table(uint8_t port_no, uint8_t cmd_slot) {
 
 PRDTEntry* get_prdt_entry(uint8_t port_no, uint8_t cmd_slot, uint16_t prdt_entry) {
     CmdTable* cmd_table = get_cmd_table(port_no, cmd_slot);
-    return (PRDTEntry*)((uint8_t)cmd_table + sizeof(CmdTable) + prdt_entry * sizeof(PRDTEntry));
+    return (PRDTEntry*)((void*)cmd_table + sizeof(CmdTable) + prdt_entry * sizeof(PRDTEntry));
 } // this func looks good... but it is could be something wrong with it... would explain a lot.
 
 // Port Controll function
@@ -114,19 +115,21 @@ uint8_t* alloc_port_memory(uint8_t max_ports) {
 
 bool setup_ports(uint8_t max_ports) {
     // alloc memory
-    uint8_t* base = alloc_port_memory(max_ports);
+    void* base = alloc_port_memory(max_ports);
     for (uint8_t port_no = 0; port_no < max_ports; port_no++) {
         stop_cmd(port_no);
         AHCIPort* port = get_port(port_no);
         g_virt_cmd_list_base[port_no] = base + 1024 * port_no;
-        get_physical_address(g_virt_cmd_list_base[port_no], &port->cmd_list_base);
+        get_physical_address((VirtualAddress)g_virt_cmd_list_base[port_no],
+                             (PhysicalAddress*)&port->cmd_list_base);
         g_virt_fis_base[port_no] = base + 1024 * max_ports + 256 * port_no;
-        get_physical_address(g_virt_fis_base[port_no], &port->fis_base);
+        get_physical_address((VirtualAddress)g_virt_fis_base[port_no],
+                             (PhysicalAddress*)&port->fis_base);
         for (uint8_t cmd_slot = 0; cmd_slot < 32; cmd_slot++) {
             g_virt_cmd_table_base[port_no][cmd_slot] =
                 base + ((1024 + 256) * max_ports) + (port_no * 32 + cmd_slot) * CMD_TABLE_SIZE;
-            get_physical_address(g_virt_cmd_table_base[port_no][cmd_slot],
-                                 &get_cmd_header(port_no, cmd_slot)->cmd_table_base);
+            get_physical_address((VirtualAddress)g_virt_cmd_table_base[port_no][cmd_slot],
+                                 &(get_cmd_header(port_no, cmd_slot)->cmd_table_base));
         }
         start_cmd(port_no);
     }
@@ -141,9 +144,9 @@ bool setup_ahci() {
     ahci_config->BAR5 = 0xFFFFFFFF;
     uint32_t abar_size = ~(ahci_config->BAR5 & 0xFFFFFFF0ULL) + 1;
     ahci_config->BAR5 = abar;
-    g_ahci_device = map_range(abar & 0xFFFFFFF0ULL,
-                              round_up_to_multiple(abar_size, PAGE_SIZE) / PAGE_SIZE,
-                              PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+    g_ahci_device = (AHCIMemory*)map_range(abar & 0xFFFFFFF0ULL,
+                                           round_up_to_multiple(abar_size, PAGE_SIZE) / PAGE_SIZE,
+                                           PAGING_WRITABLE | PAGING_CACHE_DISABLE);
     // HBA controller reset (bit 0)
     g_ahci_device->global_ctrl |= 1;
     while (g_ahci_device->global_ctrl & 1)
@@ -171,7 +174,7 @@ int8_t free_cmd_slot(uint8_t port_no) {
     return -1;
 }
 
-bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vbuffer) {
+bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddress vbuffer) {
     PhysicalAddress buffer;
     bool flag = get_physical_address(vbuffer, &buffer);
     KERNEL_ASSERT(flag, "Ahci could not get physical adress for buffer.")
@@ -189,11 +192,11 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vb
 
     // MEMSET?
     PRDTEntry* prdt_entry = get_prdt_entry(port_no, cmd_slot, 0);
-    while (1) { // Problem 1: This loop breaks everything
-        // prdt_entry->data_base = buffer;
-        // prdt_entry->byte_count = MIN(16, count) * 512 - 1;
-        // prdt_entry->interrupt = 1;
-        // buffer += prdt_entry->byte_count;
+    while (1) {
+        prdt_entry->data_base = buffer;
+        prdt_entry->byte_count = MIN(16u, count) * 512 - 1;
+        prdt_entry->interrupt = 1;
+        buffer += prdt_entry->byte_count;
         if (count < 16) {
             break;
         }
@@ -219,11 +222,10 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, uint8_t* vb
     cmd_fis->counth = (count >> 8) & 0xFF;
 
     bool port_is_free = wait_for_port(port_no);
-    KERNEL_ASSERT(port_is_free, "Ahci, port is hung!") // PROBLEM 2 : Port seems to be hung !
+    KERNEL_ASSERT(port_is_free, "Ahci, port is hung!") // PROBLEM 1: Port seems to be hung !
 
     port->cmd_issue |= 1 << cmd_slot;
 
-    bool not_error =
-        wait_for_done(port_no, cmd_slot); // should probs be an error code.return not_error;    /**/
+    wait_for_done(port_no, cmd_slot); // should probs be an error code.return not_error;
     return true;
 }
