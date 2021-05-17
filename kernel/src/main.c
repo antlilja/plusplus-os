@@ -8,6 +8,7 @@
 #include "apic.h"
 #include "exceptions.h"
 #include "syscalls.h"
+#include "process_system.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -95,6 +96,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
 
     prepare_syscalls();
     put_string("Syscalls enabled", 10, 20);
+
+    initialize_process_system();
+    put_string("Process system initialized", 10, 21);
 
     // This function can't return
     while (1)

@@ -5,3 +5,5 @@
 
 AddressSpace* get_current_process_addr_space();
 uint64_t get_current_process_pid();
+
+void initialize_process_system();
