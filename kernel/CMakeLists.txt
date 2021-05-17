@@ -13,6 +13,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/apic.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/exceptions.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/syscalls.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/elf_loader.c
 
   # Memory
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.c
