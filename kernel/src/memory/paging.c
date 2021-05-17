@@ -340,17 +340,9 @@ void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAdd
 
 VirtualAddress map_allocation(AddressSpace* space, PageFrameAllocation* allocation,
                               PagingFlags flags) {
-    // Calculate total size of mapping
-    uint64_t size = 0;
-    {
-        PageFrameAllocation* alloc = allocation;
-        while (alloc != 0) {
-            size += get_frame_order_size(alloc->order);
-            alloc = alloc->next;
-        }
-    }
+    const uint64_t total_pages = calculate_allocation_pages(allocation);
 
-    const VirtualAddress virt_addr = alloc_addr_space(space, size / PAGE_SIZE);
+    const VirtualAddress virt_addr = alloc_addr_space(space, total_pages);
     VirtualAddress curr_virt_addr = virt_addr;
 
     PageTableLocation location;
