@@ -392,6 +392,26 @@ bool claim_virt_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pa
     return true;
 }
 
+bool map_allocation_to_range(AddressSpace* space, PageFrameAllocation* allocation,
+                             VirtualAddress virt_addr, PagingFlags flags) {
+    const uint64_t total_pages = calculate_allocation_pages(allocation);
+
+    if (claim_virt_range(space, virt_addr, total_pages) == false) return false;
+
+    PageTableLocation location;
+    populate_page_table_location(space, virt_addr, &location, true);
+
+    while (allocation != 0) {
+        const uint64_t allocation_size = get_frame_order_size(allocation->order);
+        const uint64_t pages = allocation_size / PAGE_SIZE;
+        map_range_helper(space, virt_addr, allocation->addr, pages, flags, &location);
+        allocation = allocation->next;
+        virt_addr += allocation_size;
+    }
+
+    return true;
+}
+
 bool map_to_range(AddressSpace* space, PhysicalAddress phys_addr, VirtualAddress virt_addr,
                   uint64_t pages, PagingFlags flags) {
     if (claim_virt_range(space, virt_addr, pages) == false) return false;
