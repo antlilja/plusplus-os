@@ -16,7 +16,7 @@ typedef struct {
     uint32_t singly_block;
     uint32_t doubly_block;
     uint32_t triply_block;
-} __attribute__((packed)) inode;
+} __attribute__((packed)) inode_t;
 
 typedef struct {
     uint32_t inode_number;
@@ -48,7 +48,7 @@ typedef struct {
 ---------------------------------------------------------------------------------------------
 */
 
-void read_inode(block_group* bg, inode* inode_buffer, uint32_t inode_index) {
+void read_inode(block_group* bg, inode_t* inode_buffer, uint32_t inode_index) {
     uint32_t block_group_index = (inode_index - 1) / INODES_PER_GROUP;
     // Get block group with the correct index (we currently only have one block group)
 
@@ -56,13 +56,13 @@ void read_inode(block_group* bg, inode* inode_buffer, uint32_t inode_index) {
     uint32_t inode_index = (inode_index - 1) % INODES_PER_GROUP;
     uint32_t inode_block = (inode_index * INODE_SIZE) / BLOCK_SIZE;
     // Read block to block_buf (add start of inode table)
-    inode* _inode = (inode*)block_buf;
+    inode_t* _inode = (inode_t*)block_buf;
     inode_index = inode_index % (INODES_PER_BLOCK);
     for (uint32_t i = 0; i < inode_index; i++) _inode++;
     memcpy(inode_buffer, _inode, INODE_SIZE);
 }
 
-void write_inode(block_group* bg, inode* inode_buffer, uint32_t inode_index) {
+void write_inode(block_group* bg, inode_t* inode_buffer, uint32_t inode_index) {
     uint32_t block_group_index = (inode_index - 1) / INODES_PER_GROUP;
     // Get block group with the correct index (we currently only have one block group)
 
@@ -70,7 +70,7 @@ void write_inode(block_group* bg, inode* inode_buffer, uint32_t inode_index) {
     uint32_t inode_index = (inode_index - 1) % INODES_PER_GROUP;
     uint32_t inode_block = (inode_index * INODE_SIZE) / BLOCK_SIZE;
     // Read block to block_buf (add start of inode table)
-    inode* _inode = (inode*)block_buf;
+    inode_t* _inode = (inode_t*)block_buf;
     inode_index = inode_index % (INODES_PER_BLOCK);
     for (uint32_t i = 0; i < inode_index; i++) _inode++;
     memcpy(inode_buffer, _inode, INODE_SIZE);
@@ -87,9 +87,9 @@ uint8_t find_file_inode() {
     // Return id of inode of the file
 }
 
-static inode* curr_inode = 0;
+static inode_t* curr_inode = 0;
 uint8_t read_file(char* fn) {
-    if (!curr_inode) curr_inode = (inode*)malloc(INODE_SIZE);
+    if (!curr_inode) curr_inode = (inode_t*)malloc(INODE_SIZE);
     char* filename = fn;
 
     if (!find_file_inode()) {
@@ -138,7 +138,56 @@ void alloc_block(block_group* bg) {
 }
 void create_file() {}
 
-void write_file() {}
+void write_file(char* filename, char* buf, uint32_t len) {
+    inode_t* inode = 0;
+    uint32_t inode_id = find_file_inode(); // find inode with filename
+    inode_id++;
+    if (inode_id == 1) return 0;
+    if (!inode) inode = (inode_t*)malloc(INODE_SIZE); // change malloc
+    read_inode();
+
+    if (inode->size == 0) {
+        uint32_t blocks_to_alloc = len / BLOCK_SIZE;
+        blocks_to_alloc++; // We have to allocate atleast one block
+
+        if (blocks_to_alloc > 12) {
+            // Max size is 12Kb
+            return 0;
+        }
+
+        for (uint8_t i = 0; i < blocks_to_alloc; i++) {
+            uint32_t bid = 0;  // change name
+            alloc_block(&bid); // needs fix
+            inode->data[i] = bid;
+        }
+
+        inode->size += len;
+        write_inode(inode, inode_id - 1); // needs fix
+
+        // Write buf to blocks in disk
+        for (uint8_t i = 0; i < blocks_to_alloc; i++) {
+            /*
+            TODO: loop through blocks and write
+            */
+        }
+        return 1;
+    }
+
+    // Inode already has data
+    uint32_t last_data_block = inode->size / BLOCK_SIZE;
+    uint32_t last_data_offset = (inode->size) % BLOCK_SIZE;
+
+    read_block(last_data_block);
+
+    if (len < BLOCK_SIZE - last_data_offset) {
+        /*
+        Write buf to last_data_block
+        */
+        return 1;
+    }
+
+    return 0;
+}
 
 void mount() {
     // Needs fix to work with multiple block groups
