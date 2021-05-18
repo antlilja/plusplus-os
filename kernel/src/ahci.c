@@ -39,7 +39,7 @@ CmdTable* get_cmd_table(uint8_t port_no, uint8_t cmd_slot) {
 PRDTEntry* get_prdt_entry(uint8_t port_no, uint8_t cmd_slot, uint16_t prdt_entry) {
     CmdTable* cmd_table = get_cmd_table(port_no, cmd_slot);
     return (PRDTEntry*)((void*)cmd_table + sizeof(CmdTable) + prdt_entry * sizeof(PRDTEntry));
-} // this func looks good... but it is could be something wrong with it... would explain a lot.
+} // seems to work now
 
 // Port Controll function
 // we sould probalby replace these later, maybe with bit fields... idk
@@ -80,7 +80,7 @@ void stop_cmd(uint8_t port_no) {
 bool wait_for_port(uint8_t port_no) {
     AHCIPort* port = get_port(port_no);
     for (uint32_t spin = 0; spin < 10000000; spin++) {
-        if ((port->task_file_data & (0x88))) {
+        if ((port->task_file_data & (0x88)) == 0) {
             return true;
         }
     }
@@ -96,7 +96,6 @@ bool wait_for_done(uint8_t port_no, uint8_t cmd_slot) {
         if (port->interrupt_status & (1 << 30)) {
             return false;
         }
-        break;
     }
     if (port->interrupt_status & (1 << 30)) {
         KERNEL_ASSERT(false, "Read disk error")
@@ -106,7 +105,7 @@ bool wait_for_done(uint8_t port_no, uint8_t cmd_slot) {
 }
 
 // Setup functions
-uint8_t* alloc_port_memory(uint8_t max_ports) {
+void* alloc_port_memory(uint8_t max_ports) {
     KERNEL_ASSERT((PRDT_LEN * 16) % 128 == 0, "prdt dose not align properly, use multiples of 8")
     uint64_t byte_count = (1024 + 256 + CMD_TABLE_SIZE * 32) * max_ports;
     return alloc_pages_contiguous(round_up_to_multiple(byte_count, 4096) / 4096,
@@ -120,16 +119,16 @@ bool setup_ports(uint8_t max_ports) {
         stop_cmd(port_no);
         AHCIPort* port = get_port(port_no);
         g_virt_cmd_list_base[port_no] = base + 1024 * port_no;
-        get_physical_address((VirtualAddress)g_virt_cmd_list_base[port_no],
-                             (PhysicalAddress*)&port->cmd_list_base);
+        kvirt_to_phys_addr((VirtualAddress)g_virt_cmd_list_base[port_no],
+                           (volatile PhysicalAddress*)&port->cmd_list_base);
         g_virt_fis_base[port_no] = base + 1024 * max_ports + 256 * port_no;
-        get_physical_address((VirtualAddress)g_virt_fis_base[port_no],
-                             (PhysicalAddress*)&port->fis_base);
+        kvirt_to_phys_addr((VirtualAddress)g_virt_fis_base[port_no],
+                           (volatile PhysicalAddress*)&port->fis_base);
         for (uint8_t cmd_slot = 0; cmd_slot < 32; cmd_slot++) {
             g_virt_cmd_table_base[port_no][cmd_slot] =
                 base + ((1024 + 256) * max_ports) + (port_no * 32 + cmd_slot) * CMD_TABLE_SIZE;
-            get_physical_address((VirtualAddress)g_virt_cmd_table_base[port_no][cmd_slot],
-                                 &(get_cmd_header(port_no, cmd_slot)->cmd_table_base));
+            kvirt_to_phys_addr((VirtualAddress)g_virt_cmd_table_base[port_no][cmd_slot],
+                               &(get_cmd_header(port_no, cmd_slot)->cmd_table_base));
         }
         start_cmd(port_no);
     }
@@ -144,9 +143,10 @@ bool setup_ahci() {
     ahci_config->BAR5 = 0xFFFFFFFF;
     uint32_t abar_size = ~(ahci_config->BAR5 & 0xFFFFFFF0ULL) + 1;
     ahci_config->BAR5 = abar;
-    g_ahci_device = (AHCIMemory*)map_range(abar & 0xFFFFFFF0ULL,
-                                           round_up_to_multiple(abar_size, PAGE_SIZE) / PAGE_SIZE,
-                                           PAGING_WRITABLE | PAGING_CACHE_DISABLE);
+    g_ahci_device =
+        (AHCIMemory*)kmap_phys_range(abar & 0xFFFFFFF0ULL,
+                                     round_up_to_multiple(abar_size, PAGE_SIZE) / PAGE_SIZE,
+                                     PAGING_WRITABLE | PAGING_CACHE_DISABLE);
     // HBA controller reset (bit 0)
     g_ahci_device->global_ctrl |= 1;
     while (g_ahci_device->global_ctrl & 1)
@@ -176,7 +176,7 @@ int8_t free_cmd_slot(uint8_t port_no) {
 
 bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddress vbuffer) {
     PhysicalAddress buffer;
-    bool flag = get_physical_address(vbuffer, &buffer);
+    bool flag = kvirt_to_phys_addr(vbuffer, &buffer);
     KERNEL_ASSERT(flag, "Ahci could not get physical adress for buffer.")
     AHCIPort* port = get_port(port_no);
 
@@ -222,10 +222,10 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddr
     cmd_fis->counth = (count >> 8) & 0xFF;
 
     bool port_is_free = wait_for_port(port_no);
-    KERNEL_ASSERT(port_is_free, "Ahci, port is hung!") // PROBLEM 1: Port seems to be hung !
+    KERNEL_ASSERT(port_is_free, "Ahci, port is hung!")
 
     port->cmd_issue |= 1 << cmd_slot;
 
-    wait_for_done(port_no, cmd_slot); // should probs be an error code.return not_error;
+    wait_for_done(port_no, cmd_slot); // should probs be an error code.
     return true;
 }
