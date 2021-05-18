@@ -160,9 +160,7 @@ bool setup_ahci() {
     return true;
 }
 
-int8_t free_cmd_slot(uint8_t port_no) {
-    AHCIPort* port = get_port(port_no);
-
+int8_t free_cmd_slot(AHCIPort* port) {
     uint32_t slots = (port->sata_active | port->cmd_issue);
     for (uint8_t cmd_slot = 0; cmd_slot < 32; cmd_slot++) {
         if ((slots & 1) == 0) {
@@ -180,7 +178,7 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddr
     KERNEL_ASSERT(flag, "Ahci could not get physical adress for buffer.")
     AHCIPort* port = get_port(port_no);
 
-    int8_t cmd_slot = free_cmd_slot(port_no);
+    int8_t cmd_slot = free_cmd_slot(port);
     KERNEL_ASSERT(cmd_slot != -1, "No free cmd_slot could be found.");
     // TODO Retry x amount of times before failing.
 
