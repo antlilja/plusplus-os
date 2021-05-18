@@ -6,6 +6,9 @@
 #include "acpi.h"
 #include "pci.h"
 #include "apic.h"
+#include "exceptions.h"
+#include "syscalls.h"
+#include "process_system.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -74,19 +77,28 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     setup_idt();
     put_string("Interrupt descriptor table initalized", 10, 14);
 
+    register_exception_interrupts();
+    put_string("Registered exception interrupts", 10, 15);
+
     // After this point all physical addresses have to be mapped to virtual memory
     // NOTE: The memory pointed at by mm and fb should NOT be used after this point
     free_uefi_memory_and_remove_identity_mapping(mm);
-    put_string("UEFI data deallocated and identity mapping removed", 10, 15);
+    put_string("UEFI data deallocated and identity mapping removed", 10, 16);
 
     initialize_acpi(rsdp);
-    put_string("ACPI Initialized", 10, 16);
+    put_string("ACPI Initialized", 10, 17);
 
     enumerate_pci_devices();
-    put_string("PCI devices enumerated", 10, 17);
+    put_string("PCI devices enumerated", 10, 18);
 
     setup_apic();
-    put_string("APIC(s) set up and usable", 10, 18);
+    put_string("APIC(s) set up and usable", 10, 19);
+
+    prepare_syscalls();
+    put_string("Syscalls enabled", 10, 20);
+
+    initialize_process_system();
+    put_string("Process system initialized", 10, 21);
 
     setup_ahci();
     put_string("Ahci ok!", 10, 19);

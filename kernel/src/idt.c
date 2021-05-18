@@ -2,6 +2,7 @@
 #include "gdt.h"
 
 #include <stdint.h>
+#include <string.h>
 
 // https://wiki.osdev.org/Interrupt_Descriptor_Table#IDT_in_IA-32e_Mode_.2864-bit_IDT.29
 typedef struct {
@@ -21,16 +22,11 @@ IDTEntry __attribute__((aligned(8))) g_idt[256] = {0};
 void setup_idt() {
     struct {
         uint16_t size;
-        uint64_t base;
-    } __attribute__((packed)) idt;
-
-    // TODO(Anton Lilja, 10-04-21):
-    // We have to do manual assignment here because the compiler might try to optimize in virtual
-    // address pointers at compile time otherwise.
-    // Find way to disable this optimization or
-    // make sure to map kernel correctly before any of this code.
-    idt.size = sizeof(g_idt) - 1;
-    idt.base = (uint64_t)&g_idt;
+        void* base;
+    } __attribute__((packed)) idt = {
+        .size = sizeof(g_idt) - 1,
+        .base = (void*)&g_idt,
+    };
 
     asm(
         // Set IDT
@@ -43,8 +39,6 @@ void setup_idt() {
 }
 
 // General way to register an interrupt where you can set all values
-// This is not in the header because it doesn't make sense to specify an
-// IST, segment selector or the privilege level
 void set_idt_gate(uint8_t irq, uint8_t type, uint64_t handler_address, uint16_t segment_selector,
                   uint8_t ist, uint8_t privilege) {
     g_idt[irq].offset_0_15 = handler_address & 0xffff;
@@ -55,10 +49,8 @@ void set_idt_gate(uint8_t irq, uint8_t type, uint64_t handler_address, uint16_t 
     g_idt[irq].offset_32_63 = (handler_address >> 32) & 0xffffffff;
 }
 
-// Convenience function to register interrupts for the kernel without an ist
-// TODO (Anton Lilja, 30-03-2021):
-// This might be a temporary interface to register interrupts,
-// we need the specify ist for certain interrupts where a new stack is needed.
-void register_interrupt(uint8_t irq, uint8_t type, uint64_t handler_address) {
-    set_idt_gate(irq, type, handler_address, GDT_KERNEL_CODE_SEGMENT, 0, 0);
+void register_interrupt(uint8_t irq, uint8_t type, bool ist, void* handler) {
+    set_idt_gate(irq, type, (uint64_t)handler, GDT_KERNEL_CODE_SEGMENT, ist ? 1 : 0, 0);
 }
+
+void unregister_interrupt(uint8_t irq) { memset((void*)&g_idt[irq], 0, sizeof(IDTEntry)); }

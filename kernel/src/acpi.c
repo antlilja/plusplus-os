@@ -73,11 +73,7 @@ void prepare_acpi_memory(void* uefi_memory_map) {
         entry_count += 1;
     }
 
-    g_remap_list = ({
-        const uint64_t pages = ((entry_count * sizeof(ACPIMemRemap)) + PAGE_SIZE - 1) / PAGE_SIZE;
-
-        (ACPIMemRemap*)alloc_pages(pages, PAGING_WRITABLE);
-    });
+    g_remap_list = kalloc(entry_count * sizeof(ACPIMemRemap));
     KERNEL_ASSERT(g_remap_list != 0, "Out of memory")
 
     // Store remap info
@@ -85,7 +81,7 @@ void prepare_acpi_memory(void* uefi_memory_map) {
         UEFIMemoryDescriptor* desc = (UEFIMemoryDescriptor*)&memory_map->buffer[i];
         if (desc->type != EfiACPIMemoryNVS && desc->type != EfiACPIReclaimMemory) continue;
 
-        const VirtualAddress virt = map_range(desc->physical_start, desc->num_pages, 0);
+        const VirtualAddress virt = kmap_phys_range(desc->physical_start, desc->num_pages, 0);
         ACPIMemRemap* entry = &g_remap_list[g_remap_count++];
 
         entry->phys = desc->physical_start;

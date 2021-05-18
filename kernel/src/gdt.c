@@ -1,6 +1,10 @@
 #include "gdt.h"
 #include <stdint.h>
 
+#include "memory.h"
+
+#define TSS_STACK_PAGES 2
+
 // https://wiki.osdev.org/Global_Descriptor_Table
 typedef struct {
     uint16_t limit_0_15;
@@ -16,11 +20,11 @@ struct {
     GDTEntry kernel_code;
     GDTEntry kernel_data;
     GDTEntry null2;
-    GDTEntry user_code;
     GDTEntry user_data;
+    GDTEntry user_code;
     GDTEntry tss_low;
     GDTEntry tss_high;
-} __attribute__((packed)) g_gdt = {
+} __attribute__((packed)) __attribute__((aligned(8))) g_gdt = {
     // https://wiki.osdev.org/Global_Descriptor_Table
     // Null segments are required
     .null = {0, 0, 0, 0, 0, 0},
@@ -40,73 +44,56 @@ struct {
 struct {
     uint32_t reserved0;
     // Stack pointers for different privilege levels
-    uint64_t rsp0;
-    uint64_t rsp1;
-    uint64_t rsp2;
+    void* rsp[3];
     uint64_t reserved1;
-    // Interrupt stack table
-    uint64_t ist1;
-    uint64_t ist2;
-    uint64_t ist3;
-    uint64_t ist4;
-    uint64_t ist5;
-    uint64_t ist6;
-    uint64_t ist7;
-    uint64_t reserved2;
-    uint16_t reserved3;
+    void* interrupt_stack_table[7];
+    uint8_t reserved2[10];
     // IO bitmap
     uint16_t iopb_offset;
-} __attribute__((packed)) g_tss = {0};
+} __attribute__((packed)) __attribute__((aligned(8))) g_tss = {0};
 
-// Setup defines in assembly
-// Weird C nested macros are required here to concatenate
-// the inline assembly strings with the value of the macro as a string
-#define STR(x) #x
-#define XSTR(s) STR(s)
-asm(".equ KERNEL_CODE_SEGMENT, " XSTR(GDT_KERNEL_CODE_SEGMENT) "\n");
-asm(".equ KERNEL_DATA_SEGMENT, " XSTR(GDT_KERNEL_DATA_SEGMENT) "\n");
-asm(".equ TSS_SEGMENT, " XSTR(GDT_TSS_SEGMENT) "\n");
-#undef XSTR
-#undef STR
+__attribute__((naked)) void set_gdt_and_tss(void* __attribute__((unused)) gdt) {
+    asm volatile(
+        // Disable interrupts before setting GDT and TSS
+        "cli\n"
 
-// Define the function set_gdt in assembly
-asm("set_gdt_and_tss:\n"
+        // Set pointer to GDT
+        "lgdt (%%rdi)\n"
 
-    // Disable interrupts before setting GDT and TSS
-    "cli\n"
+        // Setup offset to TSS
+        "mov %[tss_segment], %%ax\n"
+        "ltr %%ax\n"
 
-    // Set pointer to GDT
-    "lgdt (%rdi)\n"
+        // Set all segment registers to the kernel data segment
+        "mov %[kernel_data_segment], %%ax\n"
+        "mov %%ax, %%ds\n"
+        "mov %%ax, %%es\n"
+        "mov %%ax, %%fs\n"
+        "mov %%ax, %%gs\n"
+        "mov %%ax, %%ss\n"
 
-    // Setup offset to TSS
-    "mov $TSS_SEGMENT, %ax\n"
-    "ltr %ax\n"
+        // Push code segment onto stack before return address to use far return
+        // this sets the code segment register (cs)
+        "pop %%rdi\n"
+        "mov %[kernel_code_segment], %%rax\n"
+        "push %%rax\n"
+        "push %%rdi\n"
+        "lretq\n"
+        :
+        : [kernel_code_segment] "i"(GDT_KERNEL_CODE_SEGMENT),
+          [kernel_data_segment] "i"(GDT_KERNEL_DATA_SEGMENT),
+          [tss_segment] "i"(GDT_TSS_SEGMENT));
+}
 
-    // Set all segment registers to the kernel data segment
-    "mov $KERNEL_DATA_SEGMENT, %ax\n"
-    "mov %ax, %ds\n"
-    "mov %ax, %es\n"
-    "mov %ax, %fs\n"
-    "mov %ax, %gs\n"
-    "mov %ax, %ss\n"
-
-    // Push code segment onto stack before return address to use far return
-    // this sets the code segment register (cs)
-    "pop %rdi\n"
-    "mov $KERNEL_CODE_SEGMENT, %rax\n"
-    "push %rax\n"
-    "push %rdi\n"
-    "lretq\n");
-
-// This is the function defined in assembly
-extern void set_gdt_and_tss(void* gdt);
+void set_tss_kernel_stack(void* stack_ptr) { g_tss.rsp[0] = stack_ptr; }
 
 void setup_gdt_and_tss() {
     // Set io bitmap offset to the size of the TSS because we are not using it.
     g_tss.iopb_offset = sizeof(g_tss);
 
-    // TODO (Anton Lilja, 29-03-2021):
-    // Setup TSS properly with an interrupt stack table and privilege level stack pointers.
+    // Allocate one entry of the interrupt descriptor table
+    g_tss.interrupt_stack_table[0] =
+        (void*)alloc_pages(TSS_STACK_PAGES, PAGING_WRITABLE) + TSS_STACK_PAGES * PAGE_SIZE;
 
     // Setup GDT entry for the TSS
     // The address is split up into several fields
@@ -121,16 +108,11 @@ void setup_gdt_and_tss() {
     // We will give a pointer to this struct to the lgdt instruction
     struct {
         uint16_t size;
-        uint64_t base;
-    } __attribute__((packed)) gdt;
-
-    // TODO(Anton Lilja, 10-04-21):
-    // We have to do manual assignment here because the compiler might try to optimize in virtual
-    // address pointers at compile time otherwise.
-    // Find way to disable this optimization or
-    // make sure to map kernel correctly before any of this code.
-    gdt.size = sizeof(g_gdt) - 1;
-    gdt.base = (uint64_t)&g_gdt;
+        void* base;
+    } __attribute__((packed)) gdt = {
+        .size = sizeof(g_gdt) - 1,
+        .base = (void*)&g_gdt,
+    };
 
     set_gdt_and_tss((void*)&gdt);
 }

@@ -43,6 +43,15 @@ uint8_t get_min_size_frame_order(uint64_t pages) {
     return MIN(64 - __builtin_clzll(order_0_blocks - 1), FRAME_ORDERS);
 }
 
+uint64_t calculate_allocation_pages(PageFrameAllocation* allocation) {
+    uint64_t size = 0;
+    while (allocation != 0) {
+        size += get_frame_order_size(allocation->order);
+        allocation = allocation->next;
+    }
+    return size / PAGE_SIZE;
+}
+
 void free_frame_allocation_entries(PageFrameAllocation* allocations) {
     while (allocations != 0) {
         MemoryEntry* memory_entry = (MemoryEntry*)allocations;

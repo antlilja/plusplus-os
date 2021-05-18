@@ -26,6 +26,9 @@ uint64_t get_frame_order_size(uint8_t order);
 // Return FRAME_ORDERS if order doesn't exist
 uint8_t get_min_size_frame_order(uint64_t pages);
 
+// Returns size of allocation list in pages
+uint64_t calculate_allocation_pages(PageFrameAllocation* allocation);
+
 // Frees frame allocation list
 void free_frame_allocation_entries(PageFrameAllocation* allocations);
 
