@@ -188,20 +188,6 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddr
 
     CmdTable* cmd_table = get_cmd_table(port_no, cmd_slot);
 
-    // MEMSET?
-    PRDTEntry* prdt_entry = get_prdt_entry(port_no, cmd_slot, 0);
-    while (1) {
-        prdt_entry->data_base = buffer;
-        prdt_entry->byte_count = MIN(16u, count) * 512 - 1;
-        prdt_entry->interrupt = 1;
-        buffer += prdt_entry->byte_count;
-        if (count < 16) {
-            break;
-        }
-        count -= 16;
-        prdt_entry++;
-    }
-
     FISRegH2D* cmd_fis = (FISRegH2D*)cmd_table;
     cmd_fis->fis_type = FIS_TYPE_REG_H2D;
     cmd_fis->c = 1;
@@ -218,6 +204,20 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddr
     // OSdev does this, why?
     cmd_fis->countl = count & 0xFF;
     cmd_fis->counth = (count >> 8) & 0xFF;
+
+    // MEMSET?
+    PRDTEntry* prdt_entry = get_prdt_entry(port_no, cmd_slot, 0);
+    while (1) {
+        prdt_entry->data_base = buffer;
+        prdt_entry->byte_count = MIN(16u, count) * 512 - 1;
+        prdt_entry->interrupt = 1;
+        buffer += prdt_entry->byte_count;
+        if (count < 16) {
+            break;
+        }
+        count -= 16;
+        prdt_entry++;
+    }
 
     bool port_is_free = wait_for_port(port_no);
     KERNEL_ASSERT(port_is_free, "Ahci, port is hung!")
