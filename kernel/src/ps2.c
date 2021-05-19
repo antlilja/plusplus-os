@@ -18,38 +18,21 @@
 bool g_kbstatus[0x80];
 volatile char g_last_char_changed = 0;
 
-static uint8_t translate_table[0x80] = {
-    0xff, 0x29, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2D, 0x2E, 0x2A,
-    0x2B, 0x14, 0x1A, 0x08, 0x15, 0x17, 0x1C, 0x18, 0x0C, 0x12, 0x13, 0x2F, 0x30, 0x28, 0xE0,
-    0x04, 0x16, 0x07, 0x09, 0x0A, 0x0B, 0x0D, 0x0E, 0x0F, 0x33, 0x34, 0x35, 0xE1, 0x31, 0x1D,
-    0x1B, 0x06, 0x19, 0x05, 0x11, 0x10, 0x36, 0x37, 0x38, 0xE5, 0xff, 0xE2, 0x2C, 0x39, 0x3A,
-    0x3B, 0x3C, 0x3D, 0x3E, 0x40, 0x41, 0x42, 0x43, 0xff, 0xff, 0x5F, 0x60, 0x61, 0x56, 0x5C,
-    0x97, 0x5E, 0x57, 0x59, 0x5A, 0x5B, 0x62, 0x63, 0xff, 0xff, 0x64, 0x44, 0x45};
+char translation_table[0x80] = {
+    0,   0,   '1', '2', '3',  '4', '5', '6',  '7', '8', '9', '0', '-', '=', 0,   0,   'q', 'w',
+    'e', 'r', 't', 'y', 'u',  'i', 'o', 'p',  '[', ']', 0,   0,   'a', 's', 'd', 'f', 'g', 'h',
+    'j', 'k', 'l', ';', '\'', '`', 0,   '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/'};
+
+char shift_translation_table[0x80] = {
+    0,   0,   '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0,   0,   'Q', 'W',
+    'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0,   0,   'A', 'S', 'D', 'F', 'G', 'H',
+    'J', 'K', 'L', ':', '"', '~', 0,   '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?'};
 
 bool upper_case() { return g_kbstatus[KEYCODE_LSHIFT] || g_kbstatus[KEYCODE_RSHIFT]; }
 
 char scan_code_to_letter(uint8_t scan_code) {
-    // This should be a set of translation tables from keycode to ascii for shift and altgr
-    scan_code = translate_table[scan_code];
-
-    // Letters
-    if (scan_code >= 4 && scan_code <= 0x1d) {
-        const uint8_t offset = (upper_case() ? 'A' : 'a') - 4;
-
-        return scan_code + offset;
-    }
-
-    // Numbers 1 - 9
-    if (scan_code >= 0x1E && scan_code < 0x27) {
-        const uint8_t offset = (upper_case() ? '!' : '1') - 0x1E;
-
-        return scan_code + offset;
-    }
-
-    // Zero
-    if (scan_code == 0x27) return upper_case() ? '=' : '0';
-
-    return 0;
+    char* table = upper_case() ? shift_translation_table : translation_table;
+    return table[scan_code];
 }
 
 bool has_byte() { return (port_in_u8(PS2_STATUS) & 1) != 0; }
