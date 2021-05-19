@@ -179,14 +179,23 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
                 VirtualAddress virt_addr = kmap_allocation(allocation, PAGING_WRITABLE);
 
                 // Populate pool with allocated pages
-                for (uint64_t i = 0; i < PAGE_POOL_THRESHOLD; ++i) {
-                    PagePoolEntry* entry = (PagePoolEntry*)get_memory_entry();
-                    entry->next = (VirtualAddress)g_page_pool.head;
-                    g_page_pool.head = entry;
-                    virt_addr += PAGE_SIZE;
-                }
+                while (allocation != 0) {
+                    PhysicalAddress phys_addr = allocation->addr;
+                    const uint64_t pages = get_frame_order_size(allocation->order) / PAGE_SIZE;
+                    for (uint64_t i = 0; i < pages; ++i) {
+                        PagePoolEntry* entry = (PagePoolEntry*)get_memory_entry();
+                        entry->next = (VirtualAddress)g_page_pool.head;
+                        entry->virt_addr = virt_addr >> 12;
 
-                free_frame_allocation_entries(allocation);
+                        entry->phys_addr = phys_addr >> 12;
+                        g_page_pool.head = entry;
+                        virt_addr += PAGE_SIZE;
+                        phys_addr += PAGE_SIZE;
+                    }
+                    MemoryEntry* memory_entry = (MemoryEntry*)allocation;
+                    allocation = allocation->next;
+                    free_memory_entry(memory_entry);
+                }
             }
 
             PagePoolEntry* pool_entry = g_page_pool.head;
@@ -200,9 +209,10 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
             entry->present = true;
             entry->write = true;
 
-            memset((void*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12), 0, PAGE_SIZE);
-
             PageEntry* entries = (PageEntry*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12);
+
+            memset((void*)entries, 0, PAGE_SIZE);
+
             return entries;
         }
         else {
