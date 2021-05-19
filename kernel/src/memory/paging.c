@@ -70,6 +70,8 @@ void new_address_space(AddressSpace* space, uint16_t pdp_index, uint8_t prot) {
     KERNEL_ASSERT(pdp_index < KERNEL_PML4_OFFSET,
                   "AddressSpace can't overlap with kernel address space")
 
+    memset(space, 0, sizeof(AddressSpace));
+
     KERNEL_ASSERT(prot <= 0b1111, "Prot is only 4 bits page entries")
     space->prot = prot;
 
