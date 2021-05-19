@@ -212,7 +212,7 @@ bool read_to_buffer(uint8_t port_no, uint64_t start, uint32_t count, VirtualAddr
         prdt_entry->byte_count = MIN(16u, count) * 512 - 1;
         prdt_entry->interrupt = 1;
         buffer += prdt_entry->byte_count;
-        if (count < 16) {
+        if (count <= 16) {
             break;
         }
         count -= 16;
