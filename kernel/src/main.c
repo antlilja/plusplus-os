@@ -98,11 +98,11 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     prepare_syscalls();
     put_string("Syscalls enabled", 10, 20);
 
-    initialize_process_system();
-    put_string("Process system initialized", 10, 21);
-
     register_ps2_interrupt();
     put_string("Keyboard initialized", 10, 22);
+
+    initialize_process_system();
+    put_string("Process system initialized", 10, 21);
 
     // This function can't return
     while (1)
