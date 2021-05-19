@@ -4,10 +4,13 @@
 #include "syscalls.h"
 #include "gdt.h"
 #include "memory.h"
-#include "process.h"
+#include "process_system.h"
 #include "rendering.h"
 #include "port_io.h"
 #include "ps2.h"
+#include "util.h"
+
+#include <string.h>
 
 // Number of entries in the syscall table, can be increased when needed
 #define NUM_SYSCALLS 5
