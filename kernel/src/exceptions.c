@@ -23,6 +23,54 @@
 #define MACHINE_CHECK 18
 #define SIMD_FLOAT_EXCEPTION 19
 
+__attribute__((interrupt)) void unimplemented_exception(InterruptFrame* frame) {
+    clear_screen(0);
+    uint64_t x = 10;
+    uint64_t y = 10;
+
+    g_fg_color = 0xff0000;
+    put_string("UNIMPLEMENTED EXCEPTION", x, y);
+
+    x += put_string("Instruction   (RIP): ", x, ++y);
+    x += put_hex(frame->rip, x, y);
+    x = 10;
+
+    x += put_string("Stack pointer (RSP): ", x, ++y);
+    x += put_hex(frame->rsp, x, y);
+    x = 10;
+
+    while (1)
+        ;
+}
+
+__attribute__((interrupt)) void general_protection_fault(ErrorCodeInterruptFrame* frame) {
+    clear_screen(0);
+    uint64_t x = 10;
+    uint64_t y = 10;
+
+    g_fg_color = 0xff0000;
+    put_string("GP", x, y);
+
+    x += put_string("Instruction   (RIP): ", x, ++y);
+    x += put_hex(frame->rip, x, y);
+    x = 10;
+
+    x += put_string("Stack pointer (RSP): ", x, ++y);
+    x += put_hex(frame->rsp, x, y++);
+    x = 10;
+
+    x += put_string("err: ", x, ++y);
+    x += put_binary((frame->err >> 1) & 3, x, y);
+    x = 10;
+
+    x += put_string("selector index: ", x, ++y);
+    x += put_hex((frame->err >> 4) & ((1 << 13) - 1), x, y);
+    x = 10;
+
+    while (1)
+        ;
+}
+
 __attribute__((interrupt)) void page_fault(ErrorCodeInterruptFrame* frame) {
     clear_screen(0);
     uint64_t x = 10;
@@ -59,5 +107,10 @@ __attribute__((interrupt)) void page_fault(ErrorCodeInterruptFrame* frame) {
 }
 
 void register_exception_interrupts() {
+    for (int i = 0; i < 0x20; i++)
+        register_interrupt(i, INTERRUPT_GATE, false, (void*)&unimplemented_exception);
+
     register_interrupt(PAGE_FAULT, INTERRUPT_GATE, false, (void*)&page_fault);
+    register_interrupt(
+        GENERAL_PROTECTION_FAULT, INTERRUPT_GATE, false, (void*)general_protection_fault);
 }
