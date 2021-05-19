@@ -530,6 +530,26 @@ bool virt_to_phys_addr(AddressSpace* space, VirtualAddress virt_addr, PhysicalAd
     return true;
 }
 
+bool range_set_flags(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages,
+                     PagingFlags flags) {
+    PageTableLocation location;
+    populate_page_table_location(space, virt_addr, &location, false);
+
+    for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, &location, false);
+
+        const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
+
+        if (location.pt[index].present == false) return false;
+
+        set_flags(&location.pt[index], flags);
+
+        virt_addr += PAGE_SIZE;
+    }
+
+    return true;
+}
+
 VirtualAddress kmap_allocation(PageFrameAllocation* allocation, PagingFlags flags) {
     return map_allocation(&g_kernel_space, allocation, flags);
 }

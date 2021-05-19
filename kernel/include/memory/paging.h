@@ -97,6 +97,11 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
 // Returns false if the virtual address isn't mapped
 bool virt_to_phys_addr(AddressSpace* space, VirtualAddress virt_addr, PhysicalAddress* phys_addr);
 
+// Sets the flags for a virtual address range
+// Returns false if range is not mapped
+bool range_set_flags(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages,
+                     PagingFlags flags);
+
 VirtualAddress kmap_allocation(PageFrameAllocation* allocation, PagingFlags flags);
 
 VirtualAddress kmap_phys_range(PhysicalAddress phys_addr, uint64_t pages, PagingFlags flags);
