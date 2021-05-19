@@ -9,6 +9,7 @@
 #include "exceptions.h"
 #include "syscalls.h"
 #include "process_system.h"
+#include "ps2.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -99,6 +100,9 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
 
     initialize_process_system();
     put_string("Process system initialized", 10, 21);
+
+    register_ps2_interrupt();
+    put_string("Keyboard initialized", 10, 22);
 
     // This function can't return
     while (1)
