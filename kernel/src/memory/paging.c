@@ -337,6 +337,7 @@ void page_table_traversal_helper(AddressSpace* space, VirtualAddress virt_addr,
 void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAddress phys_addr,
                       uint64_t pages, PagingFlags flags, PageTableLocation* location) {
     for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, location);
 
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location->pt[index].phys_addr = phys_addr >> 12;
@@ -351,7 +352,6 @@ void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAdd
 
         phys_addr += PAGE_SIZE;
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(space, virt_addr, location);
     }
 }
 
@@ -448,6 +448,7 @@ void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) 
     populate_page_table_location(space, virt_addr, &location, false);
 
     for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, &location);
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location.pt[index].value = 0;
 
@@ -455,7 +456,6 @@ void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) 
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(space, virt_addr, &location);
     }
 }
 
@@ -469,6 +469,7 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
     PhysicalAddress curr_phys_addr;
     PhysicalAddress frame_pages = 0;
     for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, &location);
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
 
         if (frame_pages == 0) {
@@ -496,7 +497,6 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(space, virt_addr, &location);
     }
 
     if (frame_pages != 0) {
