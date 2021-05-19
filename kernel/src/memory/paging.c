@@ -22,6 +22,8 @@
 
 #define OFFSET_INDEX_MASK 0x1ffULL
 
+#define NON_EXT_ADDR_MASK 0xffffffffffffULL
+
 #define PT 0
 #define PD 1
 #define PDP 2
@@ -374,7 +376,7 @@ VirtualAddress map_phys_range(AddressSpace* space, PhysicalAddress phys_addr, ui
 }
 
 bool claim_virt_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) {
-    if (space->current_address <= virt_addr) {
+    if (space->current_address <= (virt_addr & NON_EXT_ADDR_MASK)) {
         // Check if virtual address range would be outside of the PDP range
         if (virt_addr + (pages * PAGE_SIZE) > (space->pdp_index + 1) * PDP_MEM_RANGE) return false;
 
@@ -384,7 +386,7 @@ bool claim_virt_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pa
         free_entry->next = (VirtualAddress)space->free_list;
         space->free_list = free_entry;
 
-        space->current_address = virt_addr + pages * PAGE_SIZE;
+        space->current_address = (virt_addr + pages * PAGE_SIZE) & NON_EXT_ADDR_MASK;
     }
     else {
         // TODO(Anton Lilja, 11/05/2021):
