@@ -290,7 +290,7 @@ VirtualAddress alloc_addr_space(AddressSpace* space, uint64_t pages) {
             }
 
             last = entry;
-            entry = (FreeListEntry*)entry->next;
+            entry = (FreeListEntry*)SIGN_EXT_ADDR(entry->next);
         }
     }
 
