@@ -675,6 +675,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
 
     g_kernel_space.pdp = (PageEntry*)allocated_phys_addr;
     allocated_phys_addr += PAGE_SIZE;
+    memset(g_kernel_space.pdp, 0, PAGE_SIZE);
 
     g_pml4[KERNEL_PML4_OFFSET].phys_addr = (PhysicalAddress)g_kernel_space.pdp >> 12;
     g_pml4[KERNEL_PML4_OFFSET].present = true;
