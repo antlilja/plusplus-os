@@ -9,6 +9,7 @@
 #include "exceptions.h"
 #include "syscalls.h"
 #include "process_system.h"
+#include "ps2.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -100,18 +101,11 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     initialize_process_system();
     put_string("Process system initialized", 10, 21);
 
+    register_ps2_interrupt();
+    put_string("Keyboard initialized", 10, 22);
+
     setup_ahci();
     put_string("Ahci ok!", 10, 19);
-
-    PhysicalAddress addr;
-    alloc_frames_contiguos(1, &addr);
-    uint8_t* vaddr = map_range(addr, 2, PAGING_CACHE_DISABLE | PAGING_WRITABLE);
-    *vaddr = 0xff;
-    put_hex(addr, 50, 20);
-    put_hex(vaddr, 30, 20);
-    put_hex(*vaddr, 10, 20);
-    put_int(read_to_buffer(0, 0, 17, vaddr), 5, 21);
-    put_hex(*vaddr, 10, 22);
     // This function can't return
     while (1)
         ;

@@ -5,6 +5,7 @@
 #include "memory/paging.h"
 #include "memory/entry_pool.h"
 #include "uefi.h"
+#include "util.h"
 
 #include <string.h>
 
@@ -95,8 +96,9 @@ VirtualAddress get_virtual_acpi_address(PhysicalAddress physical) {
         ACPIMemRemap* entry = &g_remap_list[i];
 
         // Find address in range
-        if (entry->phys < physical && entry->phys + entry->size > physical)
+        if (range_contains(physical, entry->phys, entry->size)) {
             return (entry->virt - entry->phys + physical);
+        }
     }
 
     return 0;

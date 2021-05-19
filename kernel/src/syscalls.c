@@ -3,9 +3,17 @@
 
 #include "syscalls.h"
 #include "gdt.h"
+#include "memory.h"
+#include "process_system.h"
+#include "rendering.h"
+#include "port_io.h"
+#include "ps2.h"
+#include "util.h"
+
+#include <string.h>
 
 // Number of entries in the syscall table, can be increased when needed
-#define NUM_SYSCALLS 1
+#define NUM_SYSCALLS 5
 
 void* g_syscall_table[NUM_SYSCALLS];
 
@@ -47,6 +55,46 @@ void syscall_halt() {
         ;
 }
 
+bool syscall_get_keystate(uint8_t keycode) {
+    if (keycode >= 0x80) return false;
+
+    return g_kbstatus[keycode];
+}
+
+char syscall_getch() { return ps2_getch(); }
+
+void syscall_get_framebuffer(Framebuffer* fb) {
+    AddressSpace* userspace = get_current_process_addr_space();
+
+    // Copy framebuffer info
+    memcpy(fb, &g_frame_buffer, sizeof(Framebuffer));
+
+    // Allocate framebuffer in userspace
+    {
+        PhysicalAddress phys_addr;
+        kvirt_to_phys_addr((VirtualAddress)fb->address, &phys_addr);
+
+        const uint64_t framebuffer_size =
+            round_up_to_multiple(fb->width * fb->height * sizeof(uint32_t), PAGE_SIZE);
+
+        const uint64_t framebuffer_pages = framebuffer_size / PAGE_SIZE;
+
+        fb->address =
+            (void*)map_phys_range(userspace, phys_addr, framebuffer_pages, PAGING_WRITABLE);
+    }
+}
+
+void* syscall_alloc_pages(uint64_t pages) {
+    PageFrameAllocation* allocation = alloc_frames(pages);
+    if (allocation == 0) return 0;
+
+    AddressSpace* userspace = get_current_process_addr_space();
+    void* ptr = (void*)map_allocation(userspace, allocation, PAGING_WRITABLE);
+
+    free_frame_allocation_entries(allocation);
+    return ptr;
+}
+
 void prepare_syscalls() {
     // Enable SCE and set syscall address
     {
@@ -84,4 +132,8 @@ void prepare_syscalls() {
 
     // Fill syscall table, which are then called through the dispatcher
     g_syscall_table[SYSCALL_HALT] = &syscall_halt;
+    g_syscall_table[SYSCALL_ALLOC_PAGES] = &syscall_alloc_pages;
+    g_syscall_table[SYSCALL_GET_FRAMEBUFFER] = &syscall_get_framebuffer;
+    g_syscall_table[SYSCALL_GETCH] = &syscall_getch;
+    g_syscall_table[SYSCALL_GET_KEYSTATE] = &syscall_get_keystate;
 }

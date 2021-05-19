@@ -16,6 +16,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/syscalls.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/elf_loader.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/process_system.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2.c
 
   # Memory
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.c
