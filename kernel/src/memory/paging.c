@@ -254,6 +254,13 @@ void add_range_to_free_list(AddressSpace* space, VirtualAddress virt_addr, uint6
     space->free_list = entry;
 }
 
+void set_flags(PageEntry* entry, PagingFlags flags) {
+    entry->write = (flags & PAGING_WRITABLE) != 0;
+    entry->cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
+    entry->write_through = (flags & PAGING_WRITE_THROUGH) != 0;
+    entry->execute_disable = ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
+}
+
 VirtualAddress alloc_addr_space(AddressSpace* space, uint64_t pages) {
     // Find previously used address space
     FreeListEntry* entry = space->free_list;
@@ -320,11 +327,7 @@ void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAdd
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location->pt[index].phys_addr = phys_addr >> 12;
         location->pt[index].present = true;
-        location->pt[index].write = (flags & PAGING_WRITABLE) != 0;
-        location->pt[index].cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
-        location->pt[index].write_through = (flags & PAGING_WRITE_THROUGH) != 0;
-        location->pt[index].execute_disable =
-            ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
+        set_flags(&location->pt[index], flags);
 
         location->pt[index].prot = space->prot;
         location->pt[index].user = space->prot == 3;
