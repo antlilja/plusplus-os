@@ -317,27 +317,36 @@ VirtualAddress alloc_addr_space(AddressSpace* space, uint64_t pages) {
 }
 
 void page_table_traversal_helper(AddressSpace* space, VirtualAddress virt_addr,
-                                 PageTableLocation* location) {
+                                 PageTableLocation* location, bool alloc_entries) {
     const uint16_t new_pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
     const uint16_t new_pt_index = GET_LEVEL_INDEX(virt_addr, PD);
     if (new_pd_index != location->pd_index) {
         location->pd_index = new_pd_index;
         location->pt_index = 0;
 
-        location->pd = get_or_alloc_page_entries(space, &space->pdp[location->pd_index], PD);
+        location->pd = alloc_entries
+                           ? get_or_alloc_page_entries(space, &space->pdp[location->pd_index], PD)
+                           : get_page_entries(space, &space->pdp[location->pd_index], PD);
+        KERNEL_ASSERT(location->pd, "PD not present")
 
-        location->pt = get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT);
+        location->pt = alloc_entries
+                           ? get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT)
+                           : get_page_entries(space, &location->pd[location->pt_index], PT);
+        KERNEL_ASSERT(location->pt, "PT not present")
     }
     else if (new_pt_index != location->pt_index) {
         location->pt_index = new_pt_index;
-        location->pt = get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT);
+        location->pt = alloc_entries
+                           ? get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT)
+                           : get_page_entries(space, &location->pd[location->pt_index], PT);
+        KERNEL_ASSERT(location->pt, "PT not present")
     }
 }
 
 void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAddress phys_addr,
                       uint64_t pages, PagingFlags flags, PageTableLocation* location) {
     for (uint64_t i = 0; i < pages; ++i) {
-        page_table_traversal_helper(space, virt_addr, location);
+        page_table_traversal_helper(space, virt_addr, location, true);
 
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location->pt[index].phys_addr = phys_addr >> 12;
@@ -448,7 +457,7 @@ void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) 
     populate_page_table_location(space, virt_addr, &location, false);
 
     for (uint64_t i = 0; i < pages; ++i) {
-        page_table_traversal_helper(space, virt_addr, &location);
+        page_table_traversal_helper(space, virt_addr, &location, false);
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location.pt[index].value = 0;
 
@@ -469,7 +478,7 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
     PhysicalAddress curr_phys_addr;
     PhysicalAddress frame_pages = 0;
     for (uint64_t i = 0; i < pages; ++i) {
-        page_table_traversal_helper(space, virt_addr, &location);
+        page_table_traversal_helper(space, virt_addr, &location, false);
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
 
         if (frame_pages == 0) {
