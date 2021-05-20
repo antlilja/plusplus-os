@@ -10,6 +10,7 @@
 #include "syscalls.h"
 #include "process_system.h"
 #include "ps2.h"
+#include "ahci.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -95,14 +96,17 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     setup_apic();
     put_string("APIC(s) set up and usable", 10, 19);
 
+    initialize_ahci();
+    put_string("AHCI Initialized", 10, 20);
+
     prepare_syscalls();
-    put_string("Syscalls enabled", 10, 20);
+    put_string("Syscalls enabled", 10, 21);
 
     register_ps2_interrupt();
     put_string("Keyboard initialized", 10, 22);
 
     initialize_process_system();
-    put_string("Process system initialized", 10, 21);
+    put_string("Process system initialized", 10, 23);
 
     // This function can't return
     while (1)
