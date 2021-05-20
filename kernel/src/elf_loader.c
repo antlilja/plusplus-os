@@ -1,5 +1,6 @@
 #include "elf_loader.h"
 
+#include "kassert.h"
 #include "memory/frame_allocator.h"
 #include "memory/paging.h"
 #include "util.h"
@@ -84,14 +85,10 @@ bool load_elf_from_buff(AddressSpace* addr_space, const void* data, void** entry
             PageFrameAllocation* allocation = alloc_frames(pages);
             if (allocation == 0) return false;
 
-            // Calculate paging flag values from program header
-            const PagingFlags flags = ((header->p_flags & PF_X) != 0 ? PAGING_EXECUTABLE : 0) |
-                                      ((header->p_flags & PF_W) != 0 ? PAGING_WRITABLE : 0);
-
             // Map memory to address specified by program header
             {
-                const bool success =
-                    map_allocation_to_range(addr_space, allocation, header->p_vaddr, flags);
+                const bool success = map_allocation_to_range(
+                    addr_space, allocation, header->p_vaddr, PAGING_WRITABLE);
                 free_frame_allocation_entries(allocation);
                 if (success == false) return false;
             }
@@ -101,6 +98,13 @@ bool load_elf_from_buff(AddressSpace* addr_space, const void* data, void** entry
 
             // Copy over segment data to allocated memory
             memcpy((void*)header->p_vaddr, data + header->p_offset, header->p_filesz);
+
+            // Calculate paging flag values from program header
+            const PagingFlags flags = ((header->p_flags & PF_X) != 0 ? PAGING_EXECUTABLE : 0) |
+                                      ((header->p_flags & PF_W) != 0 ? PAGING_WRITABLE : 0);
+
+            const bool success = range_set_flags(addr_space, header->p_vaddr, pages, flags);
+            KERNEL_ASSERT(success, "Failed to change flags of mapped memory")
         }
     }
 
