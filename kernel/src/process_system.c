@@ -309,9 +309,6 @@ void initialize_process_system() {
     // Set divice config to 2
     g_lapic->divide_configuration = 0x0;
 
-    // Unmask timer interrupt
-    g_lapic->lvt_timer &= ~APIC_TIMER_MASKED_MASK;
-
 #if 0
     Process* process = alloc_process_and_addr_space(3);
     map_address_space(process->addr_space);
@@ -338,6 +335,9 @@ void initialize_process_system() {
 
         set_tss_kernel_stack(kernel_stack);
     }
+
+    // Unmask timer interrupt
+    g_lapic->lvt_timer &= ~APIC_TIMER_MASKED_MASK;
 
     // Start local APIC timer
     g_lapic->initial_count = 0xffffff;
