@@ -526,7 +526,7 @@ bool virt_to_phys_addr(AddressSpace* space, VirtualAddress virt_addr, PhysicalAd
     const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
     if (pt[index].present == false) return false;
 
-    *phys_addr = (pt[index].phys_addr << 12) | (virt_addr & OFFSET_INDEX_MASK);
+    *phys_addr = (pt[index].phys_addr << 12) | (virt_addr & 0xfff);
     return true;
 }
 
