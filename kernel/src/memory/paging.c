@@ -22,6 +22,8 @@
 
 #define OFFSET_INDEX_MASK 0x1ffULL
 
+#define NON_EXT_ADDR_MASK 0xffffffffffffULL
+
 #define PT 0
 #define PD 1
 #define PDP 2
@@ -67,6 +69,8 @@ extern char s_kernel_data_end;
 void new_address_space(AddressSpace* space, uint16_t pdp_index, uint8_t prot) {
     KERNEL_ASSERT(pdp_index < KERNEL_PML4_OFFSET,
                   "AddressSpace can't overlap with kernel address space")
+
+    memset(space, 0, sizeof(AddressSpace));
 
     KERNEL_ASSERT(prot <= 0b1111, "Prot is only 4 bits page entries")
     space->prot = prot;
@@ -175,14 +179,23 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
                 VirtualAddress virt_addr = kmap_allocation(allocation, PAGING_WRITABLE);
 
                 // Populate pool with allocated pages
-                for (uint64_t i = 0; i < PAGE_POOL_THRESHOLD; ++i) {
-                    PagePoolEntry* entry = (PagePoolEntry*)get_memory_entry();
-                    entry->next = (VirtualAddress)g_page_pool.head;
-                    g_page_pool.head = entry;
-                    virt_addr += PAGE_SIZE;
-                }
+                while (allocation != 0) {
+                    PhysicalAddress phys_addr = allocation->addr;
+                    const uint64_t pages = get_frame_order_size(allocation->order) / PAGE_SIZE;
+                    for (uint64_t i = 0; i < pages; ++i) {
+                        PagePoolEntry* entry = (PagePoolEntry*)get_memory_entry();
+                        entry->next = (VirtualAddress)g_page_pool.head;
+                        entry->virt_addr = virt_addr >> 12;
 
-                free_frame_allocation_entries(allocation);
+                        entry->phys_addr = phys_addr >> 12;
+                        g_page_pool.head = entry;
+                        virt_addr += PAGE_SIZE;
+                        phys_addr += PAGE_SIZE;
+                    }
+                    MemoryEntry* memory_entry = (MemoryEntry*)allocation;
+                    allocation = allocation->next;
+                    free_memory_entry(memory_entry);
+                }
             }
 
             PagePoolEntry* pool_entry = g_page_pool.head;
@@ -196,9 +209,10 @@ PageEntry* get_or_alloc_page_entries(AddressSpace* space, PageEntry* entry, uint
             entry->present = true;
             entry->write = true;
 
-            memset((void*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12), 0, PAGE_SIZE);
-
             PageEntry* entries = (PageEntry*)SIGN_EXT_ADDR(pool_entry->virt_addr << 12);
+
+            memset((void*)entries, 0, PAGE_SIZE);
+
             return entries;
         }
         else {
@@ -254,6 +268,13 @@ void add_range_to_free_list(AddressSpace* space, VirtualAddress virt_addr, uint6
     space->free_list = entry;
 }
 
+void set_flags(PageEntry* entry, PagingFlags flags) {
+    entry->write = (flags & PAGING_WRITABLE) != 0;
+    entry->cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
+    entry->write_through = (flags & PAGING_WRITE_THROUGH) != 0;
+    entry->execute_disable = ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
+}
+
 VirtualAddress alloc_addr_space(AddressSpace* space, uint64_t pages) {
     // Find previously used address space
     FreeListEntry* entry = space->free_list;
@@ -283,7 +304,7 @@ VirtualAddress alloc_addr_space(AddressSpace* space, uint64_t pages) {
             }
 
             last = entry;
-            entry = (FreeListEntry*)entry->next;
+            entry = (FreeListEntry*)SIGN_EXT_ADDR(entry->next);
         }
     }
 
@@ -296,35 +317,41 @@ VirtualAddress alloc_addr_space(AddressSpace* space, uint64_t pages) {
 }
 
 void page_table_traversal_helper(AddressSpace* space, VirtualAddress virt_addr,
-                                 PageTableLocation* location) {
+                                 PageTableLocation* location, bool alloc_entries) {
     const uint16_t new_pd_index = GET_LEVEL_INDEX(virt_addr, PDP);
     const uint16_t new_pt_index = GET_LEVEL_INDEX(virt_addr, PD);
     if (new_pd_index != location->pd_index) {
         location->pd_index = new_pd_index;
         location->pt_index = 0;
 
-        location->pd = get_or_alloc_page_entries(space, &space->pdp[location->pd_index], PD);
+        location->pd = alloc_entries
+                           ? get_or_alloc_page_entries(space, &space->pdp[location->pd_index], PD)
+                           : get_page_entries(space, &space->pdp[location->pd_index], PD);
+        KERNEL_ASSERT(location->pd, "PD not present")
 
-        location->pt = get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT);
+        location->pt = alloc_entries
+                           ? get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT)
+                           : get_page_entries(space, &location->pd[location->pt_index], PT);
+        KERNEL_ASSERT(location->pt, "PT not present")
     }
     else if (new_pt_index != location->pt_index) {
         location->pt_index = new_pt_index;
-        location->pt = get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT);
+        location->pt = alloc_entries
+                           ? get_or_alloc_page_entries(space, &location->pd[location->pt_index], PT)
+                           : get_page_entries(space, &location->pd[location->pt_index], PT);
+        KERNEL_ASSERT(location->pt, "PT not present")
     }
 }
 
 void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAddress phys_addr,
                       uint64_t pages, PagingFlags flags, PageTableLocation* location) {
     for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, location, true);
 
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location->pt[index].phys_addr = phys_addr >> 12;
         location->pt[index].present = true;
-        location->pt[index].write = (flags & PAGING_WRITABLE) != 0;
-        location->pt[index].cache_disable = (flags & PAGING_CACHE_DISABLE) != 0;
-        location->pt[index].write_through = (flags & PAGING_WRITE_THROUGH) != 0;
-        location->pt[index].execute_disable =
-            ((flags & PAGING_EXECUTABLE) == 0) && g_paging_execute_disable;
+        set_flags(&location->pt[index], flags);
 
         location->pt[index].prot = space->prot;
         location->pt[index].user = space->prot == 3;
@@ -334,7 +361,6 @@ void map_range_helper(AddressSpace* space, VirtualAddress virt_addr, PhysicalAdd
 
         phys_addr += PAGE_SIZE;
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(space, virt_addr, location);
     }
 }
 
@@ -371,7 +397,7 @@ VirtualAddress map_phys_range(AddressSpace* space, PhysicalAddress phys_addr, ui
 }
 
 bool claim_virt_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) {
-    if (space->current_address <= virt_addr) {
+    if (space->current_address <= (virt_addr & NON_EXT_ADDR_MASK)) {
         // Check if virtual address range would be outside of the PDP range
         if (virt_addr + (pages * PAGE_SIZE) > (space->pdp_index + 1) * PDP_MEM_RANGE) return false;
 
@@ -381,7 +407,7 @@ bool claim_virt_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pa
         free_entry->next = (VirtualAddress)space->free_list;
         space->free_list = free_entry;
 
-        space->current_address = virt_addr + pages * PAGE_SIZE;
+        space->current_address = (virt_addr + pages * PAGE_SIZE) & NON_EXT_ADDR_MASK;
     }
     else {
         // TODO(Anton Lilja, 11/05/2021):
@@ -431,6 +457,7 @@ void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) 
     populate_page_table_location(space, virt_addr, &location, false);
 
     for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, &location, false);
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
         location.pt[index].value = 0;
 
@@ -438,7 +465,6 @@ void unmap_range(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages) 
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(space, virt_addr, &location);
     }
 }
 
@@ -452,6 +478,7 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
     PhysicalAddress curr_phys_addr;
     PhysicalAddress frame_pages = 0;
     for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, &location, false);
         const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
 
         if (frame_pages == 0) {
@@ -479,7 +506,6 @@ void unmap_and_free_frames(AddressSpace* space, VirtualAddress virt_addr, uint64
         asm volatile("invlpg (%[virt_addr])\n" : : [virt_addr] "r"(virt_addr) : "memory");
 
         virt_addr += PAGE_SIZE;
-        page_table_traversal_helper(space, virt_addr, &location);
     }
 
     if (frame_pages != 0) {
@@ -501,6 +527,26 @@ bool virt_to_phys_addr(AddressSpace* space, VirtualAddress virt_addr, PhysicalAd
     if (pt[index].present == false) return false;
 
     *phys_addr = (pt[index].phys_addr << 12) | (virt_addr & OFFSET_INDEX_MASK);
+    return true;
+}
+
+bool range_set_flags(AddressSpace* space, VirtualAddress virt_addr, uint64_t pages,
+                     PagingFlags flags) {
+    PageTableLocation location;
+    populate_page_table_location(space, virt_addr, &location, false);
+
+    for (uint64_t i = 0; i < pages; ++i) {
+        page_table_traversal_helper(space, virt_addr, &location, false);
+
+        const uint16_t index = GET_LEVEL_INDEX(virt_addr, PT);
+
+        if (location.pt[index].present == false) return false;
+
+        set_flags(&location.pt[index], flags);
+
+        virt_addr += PAGE_SIZE;
+    }
+
     return true;
 }
 
@@ -670,6 +716,7 @@ VirtualAddress initialize_paging(void* uefi_memory_map, PhysicalAddress kernel_p
 
     g_kernel_space.pdp = (PageEntry*)allocated_phys_addr;
     allocated_phys_addr += PAGE_SIZE;
+    memset(g_kernel_space.pdp, 0, PAGE_SIZE);
 
     g_pml4[KERNEL_PML4_OFFSET].phys_addr = (PhysicalAddress)g_kernel_space.pdp >> 12;
     g_pml4[KERNEL_PML4_OFFSET].present = true;

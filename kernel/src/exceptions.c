@@ -100,6 +100,8 @@ __attribute__((interrupt)) void page_fault(ErrorCodeInterruptFrame* frame) {
     put_string("Page fault info: ", x, ++y);
     put_string((frame->err & 1) ? "page-protection violation" : "non-present page", x, ++y);
     put_string((frame->err & 2) ? "while writing" : "while reading", x, ++y);
+    if ((frame->err & 4) != 0) put_string("user bit", x, ++y);
+    if ((frame->err & 8) != 0) put_string("reserved bit", x, ++y);
     put_string((frame->err & 16) ? "during an instruction fetch" : "", x, ++y);
 
     while (1)
