@@ -14,8 +14,7 @@ void __attribute__((naked)) get_framebuffer(Framebuffer* __attribute__((unused))
                  "ret");
 }
 
-
-_Noreturn void _start() {  
+_Noreturn void _start() {
     Framebuffer fb;
     get_framebuffer(&fb);
 

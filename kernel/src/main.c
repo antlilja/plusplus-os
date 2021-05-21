@@ -11,6 +11,9 @@
 #include "process_system.h"
 #include "ps2.h"
 #include "ahci.h"
+#include "fat.h"
+#include "util.h"
+#include "kassert.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -105,7 +108,28 @@ _Noreturn void kernel_entry(void* mm, void* fb, PhysicalAddress rsdp) {
     register_ps2_interrupt();
     put_string("Keyboard initialized", 10, 22);
 
-    initialize_process_system();
+    prepare_fat16_disk(0);
+
+    DirectoryEntry entry;
+    start_dir_read();
+
+    uint64_t y = 25;
+    void* terminal_buffer = 0;
+    while (read_dir_next(&entry)) {
+        put_string(entry.file_name, 10, ++y);
+
+        if (!memcmp(entry.file_name, "SORTEX", 6)) {
+            terminal_buffer = alloc_pages_contiguous(
+                round_up_to_multiple(entry.file_size, PAGE_SIZE) / PAGE_SIZE, PAGING_WRITABLE);
+
+            read_file_entry(&entry, terminal_buffer);
+            break;
+        }
+    }
+
+    KERNEL_ASSERT(terminal_buffer, "TERMINAL NOT FOUND")
+
+    initialize_process_system(terminal_buffer);
     put_string("Process system initialized", 10, 23);
 
     // This function can't return

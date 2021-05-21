@@ -10,4 +10,4 @@ uint64_t get_current_process_pid();
 // NOTE: This function should only be called when at least one process is already running
 void start_user_process(const void* elf_data);
 
-void initialize_process_system();
+void initialize_process_system(void* elf_data);
