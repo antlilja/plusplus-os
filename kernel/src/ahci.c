@@ -92,10 +92,11 @@ void read_write_sectors(uint8_t device_id, uint64_t sector, uint16_t sector_coun
             PhysicalAddress phys_addr;
             const bool success = kvirt_to_phys_addr((VirtualAddress)buffer, &phys_addr);
             KERNEL_ASSERT(success, "Failed to get phys addr")
-            cmd_table->prdt_entry[0].data_base = phys_addr;
+            cmd_table->prdt_entry[i].data_base = phys_addr;
 
-            cmd_table->prdt_entry[0].byte_count = ((sector_count % 16) * 512) - 1;
-            cmd_table->prdt_entry[0].interrupt = 1;
+            cmd_table->prdt_entry[i].byte_count = 0x2000 - 1;
+            cmd_table->prdt_entry[i].interrupt = 1;
+            buffer += 0x2000;
         }
 
         PhysicalAddress phys_addr;

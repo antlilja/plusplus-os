@@ -295,12 +295,13 @@ bool alloc_frames_contiguos(uint64_t pages, PhysicalAddress* out_addr) {
     // Remove block from free list
     g_free_lists[order_to_alloc].head = entry->next;
 
-    free_memory_entry((MemoryEntry*)entry);
-
     // Mark block as allocated
     toggle_buddy_bit(entry->addr, order_to_alloc);
 
     *out_addr = entry->addr;
+
+    free_memory_entry((MemoryEntry*)entry);
+
     return true;
 }
 
