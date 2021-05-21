@@ -30,10 +30,8 @@ typedef struct {
     void* next;               // 0x00
     AddressSpace* addr_space; // 0x8
     uint64_t pid;             // 0x10
-    void* rsp;                // 0x18
-} __attribute__((packed)) Process;
-
-_Static_assert(sizeof(Process) == 32, "Size of Process struct is not 32 bytes");
+    void* context_stack_ptr;  // 0x18
+} Process;
 
 struct {
     Process* head; // 0x0
@@ -47,72 +45,46 @@ __attribute__((always_inline)) uint64_t generate_pid() {
     return pid++;
 }
 
+void context_switch(void* rsp) {
+    // Save register and return state in on process stack
+    {
+        void* process_stack = ((void**)rsp)[18] - USER_STACK_SAVE_SIZE;
+
+        memmove(process_stack, rsp, USER_STACK_SAVE_SIZE);
+
+        g_process_queue.head->context_stack_ptr = process_stack;
+    }
+
+    unmap_address_space(g_process_queue.head->addr_space);
+
+    Process* tmp = g_process_queue.head;
+    if (tmp->next != 0) {
+        g_process_queue.head = tmp->next;
+
+        tmp->next = 0;
+        g_process_queue.tail->next = tmp;
+        g_process_queue.tail = tmp;
+    }
+
+    map_address_space(g_process_queue.head->addr_space);
+
+    // Register register and return state in on process stack
+    {
+        void* process_stack = g_process_queue.head->context_stack_ptr;
+        memmove(rsp, process_stack, USER_STACK_SAVE_SIZE);
+    }
+}
+
 __attribute__((naked)) void context_switch_handler() {
     asm volatile(
-        // Save rax on stack
+        // Save all registers
         "push %rax\n"
         "push %rbx\n"
-
-        // Put g_process_queue ptr in rax
-        "lea g_process_queue(%rip), %rax\n"
-
-        // Check if tail ptr is zero (This means there is only one process)
-        "mov 0x8(%rax), %rbx\n"
-        "cmpq $0x0, %rbx\n"
-        "jnz __switch_process\n"
-
-        // We only have to send an EOI because we're jumping back to the same process
-
-        // Send EOI to local APIC
-        "lea g_lapic(%rip), %rax\n"
-        "mov (%rax), %rax\n"
-        "movl $0x0, 0xb0(%rax)\n"
-        "pop %rbx\n"
-        "pop %rax\n"
-
-        "iretq\n"
-
-        // We are switching to a new process
-        "__switch_process:\n"
-
-        // Save interrupt stack ptr in rbx
-        "mov %rsp, %rbx\n"
-
-        // Switch over to process stack to save registers onto
-        "mov 0x28(%rbx), %rsp\n"
-
-        // Save rip
-        "mov 0x10(%rbx), %rax\n"
-        "push %rax\n"
-
-        // Save cs
-        "mov 0x18(%rbx), %rax\n"
-        "push %rax\n"
-
-        // Save rflags
-        "mov 0x20(%rbx), %rax\n"
-        "push %rax\n"
-
-        // Save ss
-        "mov 0x30(%rbx), %rax\n"
-        "push %rax\n"
-
-        // Save rbp
-        "push %rbp\n"
-
-        // Save rax
-        "mov 0x8(%rbx), %rax\n"
-        "push %rax\n"
-
-        // Save rbx
-        "mov (%rbx), %rax\n"
-        "push %rax\n"
-
-        // Save general purpose registers
         "push %rcx\n"
         "push %rdx\n"
         "push %rsi\n"
         "push %rdi\n"
+        "push %rbp\n"
         "push %r8\n"
         "push %r9\n"
         "push %r10\n"
@@ -122,45 +94,11 @@ __attribute__((naked)) void context_switch_handler() {
         "push %r14\n"
         "push %r15\n"
 
-        // Save process kernel stack ptr
-        "lea g_tss(%rip), %rax\n"
-        "mov 0x4(%rax), %rcx\n"
-        "push %rcx\n"
+        // Switch process
+        "mov %rsp, %rdi\n"
+        "call context_switch\n"
 
-        // Put head ptr into rax
-        "lea g_process_queue(%rip), %rax\n"
-        "mov (%rax), %rax\n"
-
-        // Save current process rsp
-        "mov %rsp, 0x18(%rax)\n"
-
-        // Restore interrupt stack ptr
-        "mov %rbx, %rsp\n"
-
-        // Unmap address space of old process
-        "mov 0x8(%rax), %rdi\n"
-        "call unmap_address_space\n"
-
-        // Put head at back of queue
-        // pop_from_queue returns the new head ptr (in rax)
-        "call pop_from_queue\n"
-
-        // Map address space of new process
-        "mov 0x8(%rax), %rdi\n"
-        "call map_address_space\n"
-
-        // Save interrupt stack ptr to rbx
-        "mov %rsp, %rbx\n"
-
-        // Set rsp to user stack ptr to restore registers
-        "mov 0x18(%rax), %rsp\n"
-
-        // Replace old process kernel stack ptr with new process kernel stack ptr
-        "pop %rcx\n"
-        "lea g_tss(%rip), %rdx\n"
-        "mov %rcx, 0x4(%rdx)\n"
-
-        // Restore general purpose registers
+        // Restore registers
         "pop %r15\n"
         "pop %r14\n"
         "pop %r13\n"
@@ -169,69 +107,24 @@ __attribute__((naked)) void context_switch_handler() {
         "pop %r10\n"
         "pop %r9\n"
         "pop %r8\n"
+        "pop %rbp\n"
         "pop %rdi\n"
         "pop %rsi\n"
         "pop %rdx\n"
         "pop %rcx\n"
-
-        // Pop rbx and replace old rbx on kernel stack
-        "pop %rax\n"
-        "mov %rax, (%rbx)\n"
-
-        // Pop rax and replace old rax on kernel stack
-        "pop %rax\n"
-        "mov %rax, 0x8(%rbx)\n"
-
-        "pop %rbp\n"
-
-        // Pop ss and replace old ss on kernel stack
-        "pop %rax\n"
-        "mov %rax, 0x30(%rbx)\n"
-
-        // Pop rflags and replace old rflags on kernel stack
-        "pop %rax\n"
-        "mov %rax, 0x20(%rbx)\n"
-
-        // Pop cs and replace cs on kernel stack
-        "pop %rax\n"
-        "mov %rax, 0x18(%rbx)\n"
-
-        // Pop rip and replace old rip on kernel stack
-        "pop %rax\n"
-        "mov %rax, 0x10(%rbx)\n"
-
-        // Restore interrupt stack ptr
-        "mov %rbx, %rsp\n"
-
-        // Restore rbx
         "pop %rbx\n"
 
         // Send EOI to local APIC
         "lea g_lapic(%rip), %rax\n"
         "mov (%rax), %rax\n"
         "movl $0x0, 0xb0(%rax)\n"
-
-        // Restore rax
         "pop %rax\n"
 
-        // Return from interrupt
         "iretq\n");
 }
 
 AddressSpace* get_current_process_addr_space() { return g_process_queue.head->addr_space; }
 uint64_t get_current_process_pid() { return g_process_queue.head->pid; }
-
-Process* pop_from_queue() {
-    if (g_process_queue.tail == 0) return 0;
-
-    Process* head = g_process_queue.head;
-    g_process_queue.head = head->next;
-    head->next = 0;
-    g_process_queue.tail->next = head;
-    g_process_queue.tail = head;
-
-    return g_process_queue.head;
-}
 
 Process* alloc_process_and_addr_space(uint8_t paging_prot) {
     // Allocate Process struct
@@ -264,28 +157,24 @@ void start_user_process(const void* elf_data) {
     // Allocate user stack
     {
         PageFrameAllocation* allocation = alloc_frames(USER_STACK_SIZE / PAGE_SIZE);
-        process->rsp = (void*)map_allocation(process->addr_space, allocation, PAGING_WRITABLE) +
-                       USER_STACK_SIZE - USER_STACK_SAVE_SIZE;
+        process->context_stack_ptr =
+            (void*)map_allocation(process->addr_space, allocation, PAGING_WRITABLE) +
+            USER_STACK_SIZE - USER_STACK_SAVE_SIZE;
         free_frame_allocation_entries(allocation);
     }
 
     // Zero out area of user stack that registers will be popped from
-    memset(process->rsp, 0, sizeof(uint64_t) * 20);
+    memset(process->context_stack_ptr, 0, USER_STACK_SAVE_SIZE);
 
     {
-        uint64_t* rspu64 = (uint64_t*)process->rsp;
-
-        void* kernel_stack =
-            alloc_pages(KERNEL_STACK_SIZE / PAGE_SIZE, PAGING_WRITABLE) + KERNEL_STACK_SIZE;
-
-        rspu64[0] = (uint64_t)kernel_stack; // Kernel stack
-        rspu64[19] = (uint64_t)entry;       // rip
-        rspu64[18] = GDT_USER_CODE_SEGMENT; // cs
-        rspu64[17] = 0x202;                 // rflags
-        rspu64[16] = GDT_USER_DATA_SEGMENT; // ss
+        uint64_t* rspu64 = (uint64_t*)process->context_stack_ptr;
+        rspu64[15] = (uint64_t)entry;                      // rip
+        rspu64[16] = GDT_USER_CODE_SEGMENT | 3;            // cs
+        rspu64[17] = 0x202;                                // rflags
+        rspu64[18] = (uint64_t)process->context_stack_ptr; // rsp
+        rspu64[19] = GDT_USER_DATA_SEGMENT | 3;            // ss
     }
 
-    // Put process in queue
     g_process_queue.tail->next = process;
     g_process_queue.tail = process;
 }
@@ -310,9 +199,18 @@ void initialize_process_system() {
     g_lapic->divide_configuration = 0x0;
 
 #if 0
+    // Setup shared kernel stack
+    {
+        void* kernel_stack =
+            alloc_pages(KERNEL_STACK_SIZE / PAGE_SIZE, PAGING_WRITABLE) + KERNEL_STACK_SIZE;
+
+        set_tss_kernel_stack(kernel_stack);
+    }
+
     Process* process = alloc_process_and_addr_space(3);
     map_address_space(process->addr_space);
     g_process_queue.head = process;
+    g_process_queue.tail = process;
 
     void* entry;
     {
@@ -323,17 +221,10 @@ void initialize_process_system() {
     // Allocate process stack
     {
         PageFrameAllocation* allocation = alloc_frames(USER_STACK_SIZE / PAGE_SIZE);
-        process->rsp = (void*)map_allocation(process->addr_space, allocation, PAGING_WRITABLE) +
-                       USER_STACK_SIZE;
+        process->context_stack_ptr =
+            (void*)map_allocation(process->addr_space, allocation, PAGING_WRITABLE) +
+            USER_STACK_SIZE;
         free_frame_allocation_entries(allocation);
-    }
-
-    // Allocate and set kernel stack
-    {
-        void* kernel_stack =
-            alloc_pages(KERNEL_STACK_SIZE / PAGE_SIZE, PAGING_WRITABLE) + KERNEL_STACK_SIZE;
-
-        set_tss_kernel_stack(kernel_stack);
     }
 
     // Unmask timer interrupt
@@ -348,6 +239,6 @@ void initialize_process_system() {
                  "mov $0x0202, %%r11\n"
                  "sysretq\n"
                  :
-                 : "g"(entry), "g"(process->rsp));
+                 : "g"(entry), "g"(process->context_stack_ptr));
 #endif
 }
