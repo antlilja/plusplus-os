@@ -26,6 +26,7 @@ add_custom_target(image
   COMMAND mcopy -i boot.img ${CMAKE_BINARY_DIR}/bootloader/bootloader ::/EFI/BOOT/BOOTX64.EFI
   COMMAND mcopy -i boot.img ${CMAKE_BINARY_DIR}/kernel/kernel ::/KERNEL.ELF
   COMMAND mcopy -i boot.img ${CMAKE_BINARY_DIR}/apps/terminal/terminal ::/TERMINAL
+  COMMAND mcopy -i boot.img ${CMAKE_BINARY_DIR}/apps/sortex/sortex ::/SORTEX
   VERBATIM)
 
 add_custom_target(run

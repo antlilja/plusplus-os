@@ -290,7 +290,7 @@ void start_user_process(const void* elf_data) {
     g_process_queue.tail = process;
 }
 
-void initialize_process_system() {
+void initialize_process_system(void* elf_data) {
     // Initialize local APIC timer
     register_interrupt(APIC_TIMER_IRQ, INTERRUPT_GATE, false, (void*)&context_switch_handler);
 
@@ -309,7 +309,6 @@ void initialize_process_system() {
     // Set divice config to 2
     g_lapic->divide_configuration = 0x0;
 
-#if 0
     Process* process = alloc_process_and_addr_space(3);
     map_address_space(process->addr_space);
     g_process_queue.head = process;
@@ -349,5 +348,4 @@ void initialize_process_system() {
                  "sysretq\n"
                  :
                  : "g"(entry), "g"(process->rsp));
-#endif
 }

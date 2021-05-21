@@ -49,7 +49,7 @@ target_compile_options(kernel PRIVATE
   -mno-red-zone
   -fno-builtin
   -fPIE
-  -O2
+  #-O2
   -Wall
   -Wextra
 )
