@@ -17,6 +17,7 @@ add_executable(kernel
   ${CMAKE_CURRENT_SOURCE_DIR}/src/process_system.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2.c
   ${CMAKE_CURRENT_SOURCE_DIR}/src/ahci.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/fat.c
 
   # Memory
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.c
